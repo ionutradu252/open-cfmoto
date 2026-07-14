@@ -19,3 +19,6 @@ local.properties
 logs/*.h264
 logs/*.zip
 logs/scrcpy*
+
+# The built APK is distributed via GitHub Releases (not committed — keeps the repo small).
+*.apk

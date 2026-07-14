@@ -30,8 +30,10 @@ No root, no VPN, no PC required to ride.
 
 The app isn't on the Play Store — you sideload the APK.
 
-1. Copy **`app-debug.apk`** (from this project) to your phone, or download it directly on the phone.
-2. Tap it in a file manager to install.
+1. On your phone, download the latest **`OpenCfMoto.apk`** from the
+   **[Releases page](https://github.com/BojanJ/open-cfmoto/releases/latest)**
+   (direct link: <https://github.com/BojanJ/open-cfmoto/releases/latest/download/OpenCfMoto.apk>).
+2. Tap it in a file manager / your browser's downloads to install.
 3. Android will warn that it's from an "unknown source" — allow installation for your browser/file
    manager when prompted (Settings ▸ Apps ▸ *(that app)* ▸ *Install unknown apps*).
 4. Open **Open CfMoto** once. When asked, **grant the permissions** it requests:
