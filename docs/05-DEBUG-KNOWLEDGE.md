@@ -144,7 +144,8 @@ them with ffprobe/ffmpeg:
 > dash on the real bike. The three bugs, in order of discovery: (1) hand-off race, (2) profile/res
 > hardening, (3) this keyframe-eviction bug — which was the actual black screen.
 
-The H.264 dumps (`logs/logs plus video/`) were decisive. Both AA and mirror streams are **byte-identical
+The H.264 dumps (captured via `VideoPipeline.DUMP_H264`; the raw `.h264` files are not kept in the
+repo — see `.gitignore`) were decisive. Both AA and mirror streams are **byte-identical
 in structure** — same SPS `67 42 00 1f da 01 40 12 69 a8…`, same PPS `68 ce 0d 88`, same keyframe
 cadence (every 30 frames), both play fine in a PC player. So the encoding was never the problem.
 

@@ -1,0 +1,298 @@
+09:29:27.908  Ready. tap Start and wait for the QR code scanner to show up.
+09:29:49.240  → Android Auto: scan the bike QR first so we pick the right screen profile.
+09:29:50.719  QR raw: http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37426&sn=AIte&action=1&ssid=CFMOTO1565&pwd=94cdfdb4&uid=6WWV0000AL3B734070000418
+09:29:50.723  QR parsed: ssid=CFMOTO1565 mac=null action=1 (ap=true, p2p=false) modelId=37426 sn=AIte
+09:29:50.724  → bike profile (QR ssid=CFMOTO1565 modelId=37426): CFDL26 / MotoPlay Landscape (800MT) → AA 800x480 @160dpi
+09:29:50.725  → starting Android Auto receiver (loopback self-mode). Ensure Android Auto is installed & set up.
+09:29:50.769  [AA] foreground service up (wake lock held)
+09:29:50.809  [COMPOSITOR] ready (buffer size 800x480) — AA decoder input surface up (no output canvas yet)
+09:29:50.809  [VIDEO] COMPOSITOR mode — decoder input ready; awaiting bike canvas
+09:29:50.837  [AA] Conscrypt installed as security provider (position: 1)
+09:29:50.838  [AA] WirelessServer listening on :5288
+09:29:51.643  [AA] launching Android Auto WirelessStartupActivity → 127.0.0.1:5288
+09:29:51.650  [AA] Activity trigger failed (Permission Denial: starting Intent { flg=0x10000000 xflg=0x4 cmp=com.google.android.projection.gearhead/com.google.android.apps.auto.wireless.setup.service.impl.WirelessStartupActivity (has extras) } from ProcessRecord{7ff24ef 2956:dev.coletz.opencfmoto/u0a646} (pid=2956, uid=10646) not exported from uid 10171); trying broadcast fallback
+09:29:51.663  [AA] broadcast fallback sent
+09:29:52.039  [AA] <<< Android Auto connected from 127.0.0.1
+09:29:52.301  [AA] starting AAP handshake (version + SSL)…
+09:29:52.302  [AA] Start Aap transport handshake for dev.coletz.opencfmoto.aa.SocketAccessoryConnection@5005df2
+09:29:52.360  [AA] Handshake: Version response received (ret=12, attempt=1).
+09:29:52.426  [AA] SSL handshake complete. Session id: KFMBpNQIxLBx8J1TzTC2IYeDFxbCnWaR+j/nMSgLrS4=
+09:29:52.428  [AA] Handshake: Status OK sent (8). Handshake successful.
+09:29:52.428  [AA] handshake OK — pointing decoder at encoder surface and starting read loop
+09:29:52.429  [AA] New surface set: Surface(name=android.graphics.SurfaceTexture@315bcdc mNativeObject=-5476376635659338800)/@0x8f3ec43
+09:29:52.429  [AA] Start Aap transport read loop
+09:29:52.450  [AA] read loop started — expecting ServiceDiscovery then video
+09:29:52.479  [AA] Service Discovery Request: Android
+09:29:52.661  [AA] Audio Focus Request: RELEASE
+09:29:52.666  [AA] Channel Open Request on chan 1 SENSOR
+09:29:52.681  [AA] Channel Open Request on chan 2 VIDEO
+09:29:52.682  [AA] Channel Open Request on chan 3 INPUT
+09:29:52.683  [AA] Channel Open Request on chan 5 AUDIO2
+09:29:52.684  [AA] Channel Open Request on chan 7 MIC
+09:29:52.692  [AA] Sensor Start Request sensor: DRIVING_STATUS, minUpdatePeriod: 0
+09:29:52.699  [AA] W: AapVideo: Dropped Flag 11 packet. len=4
+09:29:52.701  [AA] Media Sink Setup Request: 3 on channel VIDEO
+09:29:52.747  [AA] Config response: status: HEADUNIT
+max_unacked: 12
+configuration_indices: 0
+ (maxUnacked=12)
+09:29:52.748  [AA] Video channel set up → sending VideoFocus GAIN
+09:29:52.754  [AA] Media Sink Setup Request: 1 on channel AUDIO2
+09:29:52.755  [AA] Config response: status: HEADUNIT
+max_unacked: 16
+configuration_indices: 0
+ (maxUnacked=16)
+09:29:52.756  [AA] Sensor Start Request sensor: NIGHT, minUpdatePeriod: 0
+09:29:52.804  [AA] W: AapVideo: Dropped Flag 11 packet. len=6
+09:29:52.807  [AA] Media Start Request VIDEO: session=0, config_index=0
+09:29:53.004  [AA] W: AapVideo: Dropped Flag 11 packet. len=6
+09:29:53.005  [AA] RX: Video Focus Request - mode: VIDEO_FOCUS_PROJECTED, reason: UNKNOWN
+09:29:53.005  [AA] Video Focus PROJECTED received. Replying with VideoFocusEvent GAIN.
+09:29:53.193  [AA] H.264 SPS parsed: 800x480
+09:29:53.239  [AA] findBestCodec: hw=c2.exynos.h264.decoder, sw=c2.android.avc.decoder, preferHardware=true, selected=c2.exynos.h264.decoder
+09:29:53.304  [AA] Configuring decoder: c2.exynos.h264.decoder for 800x480
+09:29:53.344  [AA] Codec initialized: c2.exynos.h264.decoder
+09:29:53.345  [AA] Output thread started
+09:29:53.366  [AA] Output Format Changed: {crop-right=799, max-height=480, sar-width=1, color-format=2130708361, mime=video/raw, cta861.max-cll=0.0, priority=0, color-standard=1, cta861.max-fall=0.0, color-transfer=3, sar-height=1, crop-bottom=479, max-width=800, crop-left=0, width=800, color-range=2, crop-top=0, rotation-degrees=0, height=480}
+09:29:54.447  [AA] decode fps=13
+09:29:55.459  [AA] decode fps=29
+09:29:55.460  [AA] steady video reached (fps=29) — signalling ready for bike hand-off
+09:29:55.460  → Android Auto video is live — joining bike Wi-Fi
+09:29:55.506  requesting Wi-Fi join: CFMOTO1565 …
+09:29:56.469  [AA] decode fps=27
+09:29:57.478  [AA] decode fps=31
+09:29:58.503  [AA] decode fps=29
+09:29:59.508  [AA] decode fps=30
+09:30:00.514  [AA] decode fps=28
+09:30:01.518  [AA] decode fps=29
+09:30:01.616  Wi-Fi joined: CFMOTO1565 (network=479, bound)
+09:30:01.620  → Wi-Fi bound; starting EasyConn PXC flow …
+09:30:01.625  ---- environment ----
+09:30:01.627  Build: Google Pixel 9 / Android 16 (SDK 36)
+09:30:01.639  linkProps iface=wlan1 addrs=[fe80::2012:8cff:fe74:25e3/64, 192.168.43.101/24] routes=[fe80::/64 -> :: wlan1 mtu 0, 192.168.43.0/24 -> 0.0.0.0 wlan1 mtu 0, 0.0.0.0/0 -> 192.168.43.1 wlan1 mtu 0]
+09:30:01.640  ---------------------
+09:30:01.655  our IP=192.168.43.101  bike IP=192.168.43.1
+09:30:01.732  listening on 192.168.43.101 ports [10922, 10921, 10920]
+09:30:01.751  [PROBE] connect #1 -> 192.168.43.1:10930
+09:30:01.903  [PROBE] -> MDNS_RESPOND (0x70000010) {"phoneType":"Android","packageName":"com.cfmoto.cfmotointernational"}
+09:30:02.006  [PROBE] <- cmd=0x70000011 {"status":true}
+
+09:30:02.007  [PROBE] *** accepted — bike should now connect back to our ports ***
+09:30:02.077  [:10922] <<< bike connected from /192.168.43.1:60182
+09:30:02.088  [:10922] framing=CmdBaseHead (PXC control)
+09:30:02.089  [:10922] bike selected CAR_CTRL (0x10000) → ack 0x10001
+09:30:02.094  [:10922] *** CLIENT_INFO from bike *** {
+   "HUID" : "6WWV0000AL3B734070000418",
+   "HUName" : "Android_5d5a",
+   "bluetoothPolicy" : 2,
+   "btAddress" : "",
+   "btName" : "",
+   "btPin" : "",
+   "carBrand" : "test-car-brand",
+   "carConfig" : "test-car-config",
+   "carMicSupportFeature" : 0,
+   "carModel" : "test-car-model",
+   "channel" : "37426",
+   "currentHUTime" : 111976,
+   "disablePageInRVMap" : 0,
+   "disableShowCallInfo" : false,
+   "disableVR" : false,
+   "dpi" : 0,
+   "enableDPI" : false,
+   "enableSockServerAuth" : true,
+   "flavor" : 65540,
+   "mirrorMode" : 0,
+   "package_name" : "com.cfmoto.easyconnect",
+   "productType" : 3,
+   "pxcVersion" : "1.0.2",
+   "screenType" : 1,
+   "sdkVersion" : "1.1.2",
+   "socketTimeoutPeriodWifi" : 9,
+   "steeringMode" : 0,
+   "supportBTCall" : false,
+   "supportBTSetting" : false,
+   "supportBackDesktop" : false,
+   "supportBackDesktopNew" : false,
+   "supportConnect" : 776,
+   "supportDownloadScreenEvt" : true,
+   "supportFunction" : 128,
+   "supportHID" : true,
+   "supportLandscapeAdaptive" : true,
+   "supportMic" : false,
+   "supportMirrorOverlayTouch" : true,
+   "supportMirrorReconnect" : true,
+   "supportOTASpeenUp" : true,
+   "supportOTAUpdate" : true,
+   "supportPhoneSignal" : true,
+   "supportRVForAdb" : false,
+   "supportScreenMirroring" : true,
+   "supportScreenTouch" : true,
+   "supportSpeechEngine" : 2,
+   "supportSyncCorrectTime" : true,
+   "supportThirdPartyApp" : false,
+   "transportType" : 2,
+   "useBTCallRecords" : false,
+   "uuid" : "AIte",
+   "version_code" : "0",
+   "version_name" : "CFDL26.2.3.0.5",
+   "wakeupWord" : ""
+}
+
+09:30:02.106  [:10922] carHuid=6WWV0000AL3B734070000418 HUName=Android_5d5a channel=37426
+09:30:02.125  [profile] scores=CFDL26 / MotoPlay Portrait (1000 MT-X)=9, CFDL26 / MotoPlay Landscape (800MT)=12, CFDL16 / legacy (BIKE A)=1
+09:30:02.126  [:10922] *** BikeProfile selected: CFDL26 / MotoPlay Landscape (800MT) ***
+09:30:02.201  [:10922] → CLIENT_INFO reply {"pxcVersion":"1.0.2","phoneUUID":"51a75fea-1f26-44f5-a9d8-0b636801a330","phoneBrand":"google","phoneModel":"Pixel 9","phoneOsVersion":"36","phoneOs":"Android","package":"com.cfmot…
+09:30:02.240  [:10922] QUERY_SPEED {
+   "usbSpeed" : 0,
+   "wifiSpeed" : 0
+}
+ → reply 0x10691
+09:30:02.248  [:10922] <<< bike connected from /192.168.43.1:60184
+09:30:02.256  [:10922] framing=CmdBaseHead (PXC control)
+09:30:02.257  [:10922] bike selected CAR_DATA (0x20000) → ack 0x20001
+09:30:02.275  [:10922] CFDL26 ctrl 0x103a0 (OTA_FTP_INFO (CFDL26)) len=85 {
+   "port" : 11021,
+   "pwd" : "$Siwei2018@",
+   "userName" : "carbit_ec_ftp_ota"
+}
+ hex=7b0a20202022706f727422203a2031313032312c0a2020202270776422203a20222453697765693230313840222c0a20 → ack 0x103a1 (empty)
+09:30:02.282  [:10922] CHECK_SN from bike: {
+   "client_set" : "easy_conn",
+   "sn" : "G99DW4PL53CSYZCZTFCE"
+}
+
+09:30:02.284  [:10922] → CHECK_SN_RESULT {"isOk":true,"errCode":0,"errMsg":"","id":"G99DW4PL53CSYZCZTFCE","client_set":"easy_conn"}
+09:30:02.291  [:10922] CFDL26 ctrl 0x10020 (MEDIA_FEATURE_CFG (CFDL26)) len=104 {
+   "autoChangeToBT" : false,
+   "music" : true,
+   "talkie" : true,
+   "tts" : true,
+   "vr" : true
+}
+ hex=7b0a202020226175746f4368616e6765546f425422203a2066616c73652c0a202020226d7573696322203a2074727565 → ack 0x10021 (empty)
+09:30:02.292  [:10922] CFDL26 ctrl 0x10020 (MEDIA_FEATURE_CFG (CFDL26)) len=104 {
+   "autoChangeToBT" : false,
+   "music" : true,
+   "talkie" : true,
+   "tts" : true,
+   "vr" : true
+}
+ hex=7b0a202020226175746f4368616e6765546f425422203a2066616c73652c0a202020226d7573696322203a2074727565 → ack 0x10021 (empty)
+09:30:02.302  [:10922] CFDL26 ctrl 0x10040 (?) len=52 {
+   "maxNaviIcon" : 80,
+   "supportFunction" : 0
+}
+ hex=7b0a202020226d61784e61766949636f6e22203a2038302c0a20202022737570706f727446756e6374696f6e22203a20 → ack 0x10041 (empty)
+09:30:02.307  [:10922] CFDL26 ctrl 0x10430 (?) len=0  → ack 0x10431 (empty)
+09:30:02.315  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:01.196000000 hex=feffffff329200000100000000000000323032362d30372d31342031353a33303a30312e313936303030303030 → ack 0x10601 (empty)
+09:30:02.316  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:02.438  [:10921] <<< bike connected from /192.168.43.1:52838
+09:30:02.442  [:10921] framing=ReqBase (media plane) profile=CFDL26 / MotoPlay Landscape (800MT)
+09:30:02.443  [:10921] REQ_CONFIG_CAPTURE w=1280 h=576 fps=0 wantEncoder=2 ext=0 len=204
+09:30:02.531  [AA] decode fps=30
+09:30:02.613  [AA] NSD registered: AAWireless
+09:30:02.659  [VIDEO] configured Baseline@3.1
+09:30:02.720  [VIDEO] encoder started 1280x576 h264 30fps
+09:30:02.723  [VIDEO] bike canvas 1280x576 configured; AA source 800x480 → letterboxed
+09:30:02.724  [:10921] → RLY_CONFIG_CAPTURE(17) encoder=2 w=1280 h=576
+09:30:02.726  [COMPOSITOR] output set canvas=1280x576 src=800x480 → letterbox rect=960x576 @(160,0)
+09:30:02.789  [VIDEO] got codec config (SPS/PPS) 29b
+09:30:03.580  [AA] decode fps=29
+09:30:03.736  [:10922] CFDL26 ctrl 0x10450 (?) len=0  → ack 0x10451 (empty)
+09:30:03.741  [:10921] REQ_RV_DATA_START(112): using shared Android Auto video pipeline
+09:30:03.743  [VIDEO] bike attached → flushed queue + requested IDR (first frame will be a keyframe)
+09:30:03.745  [:10921] → RLY 113
+09:30:03.754  [:10920] <<< bike connected from /192.168.43.1:42960
+09:30:03.756  [:10920] framing=ReqBase (media plane) profile=CFDL26 / MotoPlay Landscape (800MT)
+09:30:03.758  [:10920] sent frame #1 (61739b)
+09:30:03.788  [:10920] sent frame #2 (66771b)
+09:30:03.813  [:10920] sent frame #3 (1068b)
+09:30:03.854  [:10920] sent frame #4 (9550b)
+09:30:03.882  [:10920] sent frame #5 (14380b)
+09:30:04.312  [:10922] CFDL26 ctrl 0x10430 (?) len=0  → ack 0x10431 (empty)
+09:30:04.317  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:04.318  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:03.201000000 hex=feffffff329200000200000000000000323032362d30372d31342031353a33303a30332e323031303030303030 → ack 0x10601 (empty)
+09:30:04.607  [AA] decode fps=30
+09:30:05.623  [AA] decode fps=29
+09:30:05.706  [:10920] sent frame #60 (7499b)
+09:30:06.319  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:06.322  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:05.204000000 hex=feffffff329200000300000000000000323032362d30372d31342031353a33303a30352e323034303030303030 → ack 0x10601 (empty)
+09:30:06.326  [:10922] CFDL26 ctrl 0x10430 (?) len=0  → ack 0x10431 (empty)
+09:30:06.637  [AA] decode fps=30
+09:30:06.755  hb#1 probed=true video=true framesSent=90 openServers=3
+09:30:07.637  [AA] decode fps=30
+09:30:07.707  [:10920] sent frame #120 (4371b)
+09:30:07.804  [:10921] TOUCH DOWN bike=(224,530) canvas=1280x576
+09:30:07.804  [AA] touch action=0 bike=(224,530) → AA=(53,441)
+09:30:07.926  [:10921] TOUCH MOVE bike=(221,530) canvas=1280x576
+09:30:07.975  [:10921] TOUCH UP bike=(221,530) canvas=1280x576
+09:30:07.975  [AA] touch action=1 bike=(221,530) → AA=(50,441)
+09:30:08.355  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:08.355  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:07.213000000 hex=feffffff329200000400000000000000323032362d30372d31342031353a33303a30372e323133303030303030 → ack 0x10601 (empty)
+09:30:08.689  [AA] decode fps=27
+09:30:10.333  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:10.336  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:09.217000000 hex=feffffff329200000500000000000000323032362d30372d31342031353a33303a30392e323137303030303030 → ack 0x10601 (empty)
+09:30:10.465  [:10920] sent frame #180 (10785b)
+09:30:10.562  [AA] decode fps=13
+09:30:11.661  [:10921] TOUCH DOWN bike=(1058,44) canvas=1280x576
+09:30:11.662  [AA] touch action=0 bike=(1058,44) → AA=(748,36)
+09:30:11.761  hb#2 probed=true video=true framesSent=200 openServers=3
+09:30:11.900  [:10921] TOUCH UP bike=(1053,42) canvas=1280x576
+09:30:11.901  [AA] touch action=1 bike=(1053,42) → AA=(744,35)
+09:30:12.347  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:12.349  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:11.218000000 hex=feffffff329200000600000000000000323032362d30372d31342031353a33303a31312e323138303030303030 → ack 0x10601 (empty)
+09:30:13.521  [:10920] REQ_RV_DATA_NEXT(114): no frame ready
+09:30:13.970  [AA] W: Decoder stall detected (no output for 3004ms). Forcing restart.
+09:30:13.975  [AA] Output thread stopped
+09:30:14.700  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:14.703  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:13.220000000 hex=feffffff329200000700000000000000323032362d30372d31342031353a33303a31332e323230303030303030 → ack 0x10601 (empty)
+09:30:14.851  [:10921] TOUCH DOWN bike=(919,279) canvas=1280x576
+09:30:14.852  [AA] touch action=0 bike=(919,279) → AA=(632,232)
+09:30:15.009  [AA] W: Decoder restart requested: sync_stall
+09:30:15.019  [:10921] TOUCH UP bike=(919,279) canvas=1280x576
+09:30:15.019  [AA] touch action=1 bike=(919,279) → AA=(632,232)
+09:30:15.049  [AA] Decoder stopped: restart: sync_stall
+09:30:15.051  [AA] W: AapTransport: Requesting recovery keyframe via focus cycle.
+09:30:15.063  [AA] findBestCodec: hw=c2.exynos.h264.decoder, sw=c2.android.avc.decoder, preferHardware=true, selected=c2.exynos.h264.decoder
+09:30:15.133  [AA] Configuring decoder: c2.exynos.h264.decoder for 800x480
+09:30:15.154  [AA] Codec initialized: c2.exynos.h264.decoder
+09:30:15.154  [AA] Output thread started
+09:30:15.185  [AA] Output Format Changed: {crop-right=799, max-height=480, sar-width=1, color-format=2130708361, mime=video/raw, cta861.max-cll=0.0, priority=0, color-standard=1, cta861.max-fall=0.0, color-transfer=3, sar-height=1, crop-bottom=479, max-width=800, crop-left=0, width=800, color-range=2, crop-top=0, rotation-degrees=0, height=480}
+09:30:15.192  [AA] decode fps=2
+09:30:15.687  [AA] W: AapVideo: Dropped Flag 11 packet. len=2
+09:30:15.689  [AA] Media Sink Stop Request: VIDEO
+09:30:15.690  [AA] Video Sink Stopped -> Normal background/transition behavior
+09:30:15.691  [AA] W: AapVideo: Dropped Flag 11 packet. len=6
+09:30:15.693  [AA] Media Start Request VIDEO: session=1, config_index=0
+09:30:16.254  [AA] decode fps=8
+09:30:16.337  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:16.343  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�         2026-07-14 15:30:15.222000000 hex=feffffff329200000800000000000000323032362d30372d31342031353a33303a31352e323232303030303030 → ack 0x10601 (empty)
+09:30:16.765  hb#3 probed=true video=true framesSent=203 openServers=3
+09:30:17.177  [:10921] TOUCH DOWN bike=(909,276) canvas=1280x576
+09:30:17.179  [AA] touch action=0 bike=(909,276) → AA=(624,230)
+09:30:17.753  [:10921] TOUCH UP bike=(916,278) canvas=1280x576
+09:30:17.754  [AA] touch action=1 bike=(916,278) → AA=(630,231)
+09:30:18.387  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:18.391  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�  	       2026-07-14 15:30:17.224000000 hex=feffffff329200000900000000000000323032362d30372d31342031353a33303a31372e323234303030303030 → ack 0x10601 (empty)
+09:30:19.233  [AA] decode fps=9
+09:30:20.253  [:10921] TOUCH DOWN bike=(515,391) canvas=1280x576
+09:30:20.254  [AA] touch action=0 bike=(515,391) → AA=(295,325)
+09:30:20.384  [:10922] CFDL26 ctrl 0x10750 (?) len=0  → ack 0x10751 (empty)
+09:30:20.385  [:10922] CFDL26 ctrl 0x10600 (?) len=45 ����2�  
+       2026-07-14 15:30:19.226000000 hex=feffffff329200000a00000000000000323032362d30372d31342031353a33303a31392e323236303030303030 → ack 0x10601 (empty)
+09:30:20.913  [:10921] TOUCH UP bike=(679,7) canvas=1280x576
+09:30:20.913  [AA] touch action=1 bike=(679,7) → AA=(432,5)
+09:30:21.770  hb#4 probed=true video=true framesSent=203 openServers=3
+09:30:21.826  [:10921] TOUCH DOWN bike=(231,528) canvas=1280x576
+09:30:21.827  [AA] touch action=0 bike=(231,528) → AA=(59,440)
+09:30:21.901  [AA] decode fps=1
+09:30:22.158  [:10920] media closed
+09:30:22.161  [:10921] media closed
+09:30:22.163  [:10922] bike closed
+09:30:22.326  [:10922] bike closed
+09:30:22.921  [AA] decode fps=30
+09:30:24.051  [AA] decode fps=2
+09:30:25.224  [AA] decode fps=11
+09:30:26.773  hb#5 probed=true video=true framesSent=203 openServers=3
+09:30:28.357  [AA] W: Decoder stall detected (no output for 3004ms). Forcing restart.
+09:30:28.359  [AA] Output thread stopped

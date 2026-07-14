@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Bike-test captures: keep the text logs (logs/*.log) in the repo, but never the
+# heavy binary artifacts (H.264 dumps, zipped bundles, the scrcpy download).
+logs/*.h264
+logs/*.zip
+logs/scrcpy*
