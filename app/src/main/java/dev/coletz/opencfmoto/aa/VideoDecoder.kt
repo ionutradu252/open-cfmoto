@@ -51,6 +51,9 @@ class VideoDecoder {
 
     @Volatile private var decoderNeedsRestart = false
     @Volatile private var decoderRestartReason: String? = null
+    /** When we last fed an input buffer — used to tell a real decoder stall (input flowing, no output)
+     *  from Android Auto simply pausing video (no input) during a UI transition or call. */
+    @Volatile private var lastInputMs = 0L
 
     /** Invoked when the decoder must be re-primed — the transport requests a fresh keyframe. */
     var onDecoderError: (() -> Unit)? = null
@@ -297,6 +300,7 @@ class VideoDecoder {
             inputBuffer.flip()
             val pts = (System.nanoTime() - startTime) / 1000
             currentCodec.queueInputBuffer(inputIndex, 0, inputBuffer.limit(), pts, flags)
+            lastInputMs = SystemClock.elapsedRealtime()
             return true
         } catch (e: Exception) {
             AaLog.e("Error feeding input buffer", e)
@@ -338,9 +342,16 @@ class VideoDecoder {
                 }
 
                 if (lastOutputMs > 0) {
-                    val stallGap = SystemClock.elapsedRealtime() - lastOutputMs
-                    if (stallGap > 3000L) {
-                        AaLog.w("Decoder stall detected (no output for ${stallGap}ms). Forcing restart.")
+                    val now = SystemClock.elapsedRealtime()
+                    val stallGap = now - lastOutputMs
+                    val inputGap = now - lastInputMs
+                    // Real stall = we're actively feeding input but getting no output → restart.
+                    // If no input is arriving, Android Auto has just paused video (UI transition, call,
+                    // decoder recovery) — stay idle and let it resume; the compositor keep-alive holds
+                    // the bike connection meanwhile. This avoids tearing down a healthy decoder and
+                    // fighting AA's own Media Stop/Start sequence.
+                    if (stallGap > 3000L && inputGap < 1000L) {
+                        AaLog.w("Decoder stall detected (no output for ${stallGap}ms, input ${inputGap}ms ago). Forcing restart.")
                         scheduleRestart("sync_stall")
                         break
                     }

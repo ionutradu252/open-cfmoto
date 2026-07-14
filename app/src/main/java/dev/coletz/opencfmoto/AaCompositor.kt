@@ -67,6 +67,12 @@ class AaCompositor(private val log: (String) -> Unit) {
 
     private val texMatrix = FloatArray(16)
 
+    // Keep-alive: once we have a decoded frame, re-emit it to the encoder at ~15fps whenever the AA
+    // decoder goes quiet, so the bike's media socket never times out during AA video pauses.
+    @Volatile private var hasContent = false
+    private var lastDrawMs = 0L
+    private val KEEPALIVE_INTERVAL_MS = 66L  // ~15 fps floor to the bike
+
     // Full-screen quad (triangle strip): pos.xy + tex.uv interleaved.
     private val quad: FloatBuffer = ByteBuffer
         .allocateDirect(4 * 4 * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().apply {
@@ -90,6 +96,7 @@ class AaCompositor(private val log: (String) -> Unit) {
                 surfaceTexture.setDefaultBufferSize(spec.width, spec.height)
                 surfaceTexture.setOnFrameAvailableListener({ handler.post { onFrame() } }, handler)
                 inputSurface = Surface(surfaceTexture)
+                handler.postDelayed(keepAlive, KEEPALIVE_INTERVAL_MS)
                 log("[COMPOSITOR] ready (buffer size ${spec.width}x${spec.height}) — AA decoder input surface up (no output canvas yet)")
             } catch (e: Exception) {
                 log("[COMPOSITOR] init failed: $e")
@@ -159,6 +166,30 @@ class AaCompositor(private val log: (String) -> Unit) {
         } catch (e: Exception) {
             return
         }
+        hasContent = true
+        drawFrame()
+    }
+
+    /**
+     * Re-emit the last decoded frame to the encoder if the Android Auto decoder has gone quiet, so the
+     * bike keeps receiving video and never hits its media-socket timeout (CLIENT_INFO
+     * socketTimeoutPeriodWifi, ~9s). AA legitimately pauses video during UI transitions (opening the
+     * app launcher, an incoming call) and while the decoder restarts/recovers — without this the
+     * encoder starves, the bike disconnects, and the whole projection drops (looks like a crash).
+     * The dash instead shows a frozen last frame until live video resumes. Runs on the GL thread.
+     */
+    private val keepAlive = object : Runnable {
+        override fun run() {
+            if (hasContent && windowSurface != EGL14.EGL_NO_SURFACE) {
+                val idleMs = android.os.SystemClock.uptimeMillis() - lastDrawMs
+                if (idleMs >= KEEPALIVE_INTERVAL_MS) drawFrame()
+            }
+            handler.postDelayed(this, KEEPALIVE_INTERVAL_MS)
+        }
+    }
+
+    /** Draw the current SurfaceTexture content (last decoded frame) into the encoder, letterboxed. */
+    private fun drawFrame() {
         if (windowSurface == EGL14.EGL_NO_SURFACE) return  // no output canvas yet — just drain
         surfaceTexture.getTransformMatrix(texMatrix)
 
@@ -188,11 +219,14 @@ class AaCompositor(private val log: (String) -> Unit) {
         GLES20.glDisableVertexAttribArray(aPosition)
         GLES20.glDisableVertexAttribArray(aTexCoord)
 
-        EGLExt.eglPresentationTimeANDROID(eglDisplay, windowSurface, surfaceTexture.timestamp)
+        // Monotonic presentation time so repeated (keep-alive) frames aren't dropped as duplicate PTS.
+        EGLExt.eglPresentationTimeANDROID(eglDisplay, windowSurface, System.nanoTime())
         EGL14.eglSwapBuffers(eglDisplay, windowSurface)
+        lastDrawMs = android.os.SystemClock.uptimeMillis()
     }
 
     fun release() {
+        handler.removeCallbacks(keepAlive)
         handler.post {
             try { inputSurface?.release() } catch (_: Exception) {}
             try { if (::surfaceTexture.isInitialized) surfaceTexture.release() } catch (_: Exception) {}
