@@ -71,6 +71,14 @@ interface BikeProfile {
     /** Whether to force the H.264 encoder to Baseline Profile @ Level 3.1. */
     val forceBaseline: Boolean get() = true
 
+    /**
+     * Some dashboards (e.g. the CFDL16 on modelId 66660742) never send their own control-plane
+     * heartbeat, so the control socket sits idle and the bike's socketTimeoutPeriodWifi watchdog
+     * tears the whole session down every ~7s. When true, EasyConnProber proactively sends
+     * CMD_HEARTBEAT on the control socket to keep the session alive.
+     */
+    val requiresPhoneHeartbeat: Boolean get() = false
+
     /** Media-plane GET_VERSION reply (version, subVersion). */
     fun versionReply(): Pair<Int, Int> = 3 to 1
 }
@@ -78,7 +86,9 @@ interface BikeProfile {
 /** Registry + selection. Never returns null — falls back to the legacy (BIKE A) profile. */
 object BikeProfiles {
     val legacy: BikeProfile = LegacyCfdl16Profile
-    private val all: List<BikeProfile> = listOf(Cfdl26PortraitProfile, Cfdl26LandscapeProfile, LegacyCfdl16Profile)
+    private val all: List<BikeProfile> = listOf(
+        Cfdl16MotoPlayLandscapeProfile, Cfdl26PortraitProfile, Cfdl26LandscapeProfile, LegacyCfdl16Profile,
+    )
 
     /** Authoritative selection from CLIENT_INFO (during the PXC handshake). */
     fun select(info: JSONObject, log: (String) -> Unit): BikeProfile {
@@ -268,4 +278,53 @@ object Cfdl26LandscapeProfile : BikeProfile {
     ): Boolean {
         return Cfdl26PortraitProfile.handleUnknownControl(tag, frame, out, log)
     }
+}
+
+/**
+ * BIKE D — a CFDL16-class MotoPlay head unit seen on modelId 66660742 (HUName "CFMOTO-4A71BD",
+ * HUID CRCP24…, sdkVersion 0.9.23.4, flavor 65540, Wi-Fi Direct "DIRECT-go-CFMOTO-…").
+ *
+ * Despite the newer modelId this is a 0.9.x unit like the 675 (BIKE A): a LANDSCAPE panel that
+ * requests an 800x400 capture, supportScreenTouch=false, mirrorMode. But unlike the 675 it
+ * advertises supportFunction=128 and sends the CFDL26-style control burst (0x103b0 password,
+ * 0x10470 voice cmds, 0x104a0 OTA ports), so those must be acked.
+ *
+ * Without this profile the three existing profiles all score 1 and the tie resolves to CFDL26
+ * PORTRAIT, which asks Android Auto for 720x1280 — a tall image the compositor letterboxes into a
+ * narrow centered strip on this wide panel (the "stretched to portrait" symptom). This profile
+ * pins it to LANDSCAPE 800x480 so the image fills the panel in the right orientation.
+ */
+object Cfdl16MotoPlayLandscapeProfile : BikeProfile {
+    override val name = "CFDL16 / MotoPlay Landscape (modelId 66660742)"
+    override val requiresSockServerAuth = false
+    override val supportsScreenTouch = false
+    /** The bike reports supportFunction=128; echo it (but do NOT claim touch — it has none). */
+    override val advertisedSupportFunction = 128
+    /** This unit never heartbeats us → the phone must, or the ~7s watchdog resets the session. */
+    override val requiresPhoneHeartbeat = true
+
+    /** Landscape ~800x400 panel → request AA landscape 800x480; the compositor fits it to 800x400. */
+    override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)
+
+    override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "66660742"
+
+    override fun score(info: JSONObject): Int {
+        var s = 0
+        // Definitive: CLIENT_INFO echoes the QR modelId in `channel`.
+        if (info.optString("channel") == "66660742") s += 10
+        // 0.9.x SDK ⇒ CFDL16-class, not a CFDL26 (1.1.x) unit — disambiguates from the CFDL26 profiles.
+        if (info.optString("sdkVersion").startsWith("0.9")) s += 2
+        if (info.optBoolean("supportLandscapeAdaptive", false)) s += 1
+        if (!info.optBoolean("supportScreenTouch", false)) s += 1
+        return s
+    }
+
+    override fun buildClientInfoReply(info: JSONObject, huid: String?, phoneUuid: String): JSONObject =
+        basePhoneClientInfo(huid, phoneUuid, advertisedSupportFunction)
+
+    // 0.9.x but it DOES send the CFDL26 control burst — ack every otherwise-unhandled control frame
+    // (reply = cmd+1, empty) exactly like the CFDL26 profiles, or the bike stalls waiting for acks.
+    override fun handleUnknownControl(
+        tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
+    ): Boolean = Cfdl26PortraitProfile.handleUnknownControl(tag, frame, out, log)
 }

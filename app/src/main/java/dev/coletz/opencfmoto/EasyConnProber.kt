@@ -9,6 +9,7 @@ import java.io.BufferedInputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.net.Inet4Address
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.ServerSocket
@@ -39,6 +40,34 @@ class EasyConnProber(
         const val BIKE_PROBE_PORT = 10930   // bike's EasyConn mDNS/probe endpoint
         const val SPOOFED_PACKAGE = "com.cfmoto.cfmotointernational"
         private val LISTEN_PORTS = intArrayOf(PORT_PXC_CTRL, PORT_MEDIA_CTRL, PORT_MEDIA_DATA)
+
+        /**
+         * Input-discovery logging. This dash is non-touch (`supportScreenTouch=false`) but reports
+         * `supportHID=true`, so its physical buttons/knob must arrive as some PXC frame we don't yet
+         * decode. With this on, every inbound frame that ISN'T routine handshake/heartbeat/video
+         * traffic is logged under the `[INPUT?]` tag with full hex — press each bike button once and
+         * the distinct frame it produces (cmd/cmdType + payload) becomes mappable. Leave on until the
+         * buttons are mapped; it only fires on non-routine frames so normal traffic stays quiet.
+         */
+        const val DEBUG_LOG_INPUT = true
+
+        /** Control-plane (:10922) cmds that are routine handshake/heartbeat — suppressed from [INPUT?]. */
+        private val CTRL_ROUTINE = setOf(
+            0x10000, 0x10001, 0x20000, 0x20001, 0x30000, 0x30001, 0x40000, 0x40001,
+            0x10010, 0x10011, 0x10690, 0x10691, 0x103e0, 0x103e1, 0x201c0, 0x201c1,
+            0x70000000, 0x70000001,
+            // CFDL26 notify burst this bike sends every (re)connect — already acked in the profile.
+            0x103b0, 0x103b1, 0x10470, 0x10471, 0x10450, 0x10451, 0x104a0, 0x104a1,
+            0x10780, 0x10781, 0x103a0, 0x103a1, 0x10020, 0x10021,
+        )
+
+        /** Media-plane (:10921/:10920) cmdTypes that are routine video negotiation/touch — suppressed. */
+        private val MEDIA_ROUTINE = setOf(16, 17, 32, 48, 49, 64, 65, 96, 97, 112, 113, 114, 115, 128, 129)
+
+        private const val INPUT_HEX_CAP = 256
+
+        /** Phone→bike control-heartbeat interval (well under the bike's ~7-9s socket watchdog). */
+        private const val CTRL_HEARTBEAT_MS = 2000L
     }
 
     private val handshake = PxcHandshake(log)
@@ -167,12 +196,23 @@ class EasyConnProber(
             //   10922 = PXC control (16-byte CmdBaseHead); 10921/10920 = media (8-byte ReqBase).
             if (port == PORT_PXC_CTRL) {
                 log("[$tag] framing=CmdBaseHead (PXC control)")
-                while (running) {
-                    val frame = try { PxcFrame.read(input) } catch (e: Exception) {
-                        log("[$tag] frame error: ${e.message}"); return
-                    } ?: run { log("[$tag] bike closed"); return }
-                    try { handshake.handle(tag, frame, socket) }
-                    catch (e: Exception) { log("[$tag] handler error: $e") }
+                if (DEBUG_LOG_INPUT) log("[$tag] INPUT capture ON — press each bike button once; watch for [INPUT?] lines")
+                val hbThread = startCtrlHeartbeat(tag, socket)
+                try {
+                    while (running) {
+                        val frame = try { PxcFrame.read(input) } catch (e: Exception) {
+                            log("[$tag] frame error: ${e.message}"); return
+                        } ?: run { log("[$tag] bike closed"); return }
+                        if (DEBUG_LOG_INPUT && frame.cmd !in CTRL_ROUTINE) {
+                            val hex = BleProtocol.bytesToHex(frame.payload.copyOf(minOf(INPUT_HEX_CAP, frame.payload.size)))
+                            log("[INPUT? $tag] ctrl 0x${frame.cmd.toUInt().toString(16)} (${PxcFrame.nameOf(frame.cmd)}) " +
+                                "len=${frame.payload.size} hex=$hex")
+                        }
+                        try { handshake.handle(tag, frame, socket) }
+                        catch (e: Exception) { log("[$tag] handler error: $e") }
+                    }
+                } finally {
+                    hbThread.interrupt()
                 }
             } else {
                 log("[$tag] framing=ReqBase (media plane) profile=${handshake.profile.name}")
@@ -184,6 +224,30 @@ class EasyConnProber(
             try { socket.close() } catch (_: IOException) {}
         }
     }
+
+    /**
+     * Proactive control-plane heartbeat. Some dashboards (see [BikeProfile.requiresPhoneHeartbeat])
+     * never send their own [PxcFrame.CMD_HEARTBEAT], so the control socket goes idle and the bike's
+     * socket-timeout watchdog resets the whole session every ~7s. We send CMD_HEARTBEAT every
+     * [CTRL_HEARTBEAT_MS] to keep it alive. Writes go through [PxcFrame.write], which synchronizes on
+     * the stream, so this is safe alongside the read thread's reply writes. Gated on the profile,
+     * which is set from CLIENT_INFO within ~100ms — before the first heartbeat is due.
+     */
+    private fun startCtrlHeartbeat(tag: String, socket: Socket): Thread =
+        thread(name = "ec-ctrl-hb-${socket.port}", isDaemon = true) {
+            val out = try { socket.getOutputStream() } catch (e: Exception) { return@thread }
+            var sent = 0
+            while (running && !socket.isClosed) {
+                try { Thread.sleep(CTRL_HEARTBEAT_MS) } catch (e: InterruptedException) { break }
+                if (!handshake.profile.requiresPhoneHeartbeat) continue
+                try {
+                    PxcFrame(PxcFrame.CMD_HEARTBEAT, ByteArray(0)).write(out)
+                    if (++sent <= 2) log("[$tag] → phone heartbeat 0x70000000 (keep-alive #$sent)")
+                } catch (e: Exception) {
+                    log("[$tag] heartbeat stopped: ${e.message}"); break
+                }
+            }
+        }
 
     // ---- Media plane: Protocol.ReqBase framing (8-byte LE header + body) ----
     // header: cmdType(s16) | cmdLen(s16) | token(i32); reply uses the same header.
@@ -197,6 +261,10 @@ class EasyConnProber(
             val token = b.getInt(4)
             val body = ByteArray(cmdLen)
             if (cmdLen > 0 && !PxcFrame.readFully(input, body, cmdLen)) { log("[$tag] media body short"); return }
+            if (DEBUG_LOG_INPUT && cmdType !in MEDIA_ROUTINE) {
+                val hex = BleProtocol.bytesToHex(body.copyOf(minOf(INPUT_HEX_CAP, body.size)))
+                log("[INPUT? $tag] media cmdType=$cmdType token=$token len=$cmdLen hex=$hex")
+            }
             handleMediaReq(tag, cmdType, token, body, out)
         }
     }
@@ -350,7 +418,34 @@ class EasyConnProber(
                 if (gw is Inet4Address && !gw.isAnyLocalAddress) return gw
             }
         }
-        return lp.dnsServers.filterIsInstance<Inet4Address>().firstOrNull()
+        lp.dnsServers.filterIsInstance<Inet4Address>().firstOrNull()?.let { return it }
+
+        // Fallback for Wi-Fi Direct / AP networks that expose no default route and no DNS server
+        // (e.g. SSID "DIRECT-go-CFMOTO-…", phone on 192.168.49.x): assume the bike is host .1 of
+        // our own IPv4 subnet — the standard group-owner address for an Android P2P group.
+        val la = lp.linkAddresses.firstOrNull {
+            val a = it.address
+            a is Inet4Address && !a.isLoopbackAddress && !a.isAnyLocalAddress
+        }
+        if (la != null) {
+            val b = la.address.address
+            val prefix = la.prefixLength.coerceIn(1, 32)
+            val ip = ((b[0].toInt() and 0xFF) shl 24) or ((b[1].toInt() and 0xFF) shl 16) or
+                ((b[2].toInt() and 0xFF) shl 8) or (b[3].toInt() and 0xFF)
+            val mask = -1 shl (32 - prefix)
+            val gwInt = (ip and mask) or 1
+            val gw = InetAddress.getByAddress(
+                byteArrayOf(
+                    (gwInt ushr 24).toByte(), (gwInt ushr 16).toByte(),
+                    (gwInt ushr 8).toByte(), gwInt.toByte(),
+                )
+            ) as Inet4Address
+            if (gw != la.address) {
+                log("[gateway] no default route/DNS; assuming ${gw.hostAddress} (from ${la.address.hostAddress}/$prefix)")
+                return gw
+            }
+        }
+        return null
     }
 
     private fun pickBikeInterfaceIp(network: Network?): Inet4Address? {
