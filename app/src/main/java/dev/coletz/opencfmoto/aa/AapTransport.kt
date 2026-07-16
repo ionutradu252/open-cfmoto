@@ -29,6 +29,9 @@ class AapTransport(
     private var connection: AccessoryConnection? = null
     private var aapRead: AapRead? = null
 
+    /** The head-unit microphone we present to Android Auto (set by AaReceiver). Null = no mic. */
+    @Volatile var microphone: AaMicrophone? = null
+
     var ignoreNextStopRequest: Boolean = false
     /** Set when VIDEO_FOCUS_NATIVE triggers a stop (user tapped Exit on the phone). */
     @Volatile var wasUserExit: Boolean = false

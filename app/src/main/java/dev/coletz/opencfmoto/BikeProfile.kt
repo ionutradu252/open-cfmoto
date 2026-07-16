@@ -79,6 +79,23 @@ interface BikeProfile {
      */
     val requiresPhoneHeartbeat: Boolean get() = false
 
+    /**
+     * How to fit the Android Auto source into the bike canvas when the aspect ratios differ:
+     *   false = letterbox — aspect-preserved, centered, black bars (safe default; nothing cropped).
+     *   true  = fill — scale to cover the whole panel, cropping the overflow (no bars).
+     */
+    val fillCanvas: Boolean get() = false
+
+    /**
+     * The dash's real panel size, when known (e.g. 800x400). Android Auto only renders at fixed
+     * resolutions (800x480, 1280x720, …), so a 2:1 panel can never be an exact match. Declaring the
+     * difference as MARGINS in service discovery makes AA lay its UI out inside the visible
+     * `panelSize` area and leave the rest empty — the compositor's fill/crop then removes exactly
+     * that empty band, giving a pixel-perfect fit with nothing real cropped and no black bars.
+     * Null = unknown → declare no margins (AA uses the full frame; fill would crop real content).
+     */
+    val panelSize: Pair<Int, Int>? get() = null
+
     /** Media-plane GET_VERSION reply (version, subVersion). */
     fun versionReply(): Pair<Int, Int> = 3 to 1
 }
@@ -302,6 +319,11 @@ object Cfdl16MotoPlayLandscapeProfile : BikeProfile {
     override val advertisedSupportFunction = 128
     /** This unit never heartbeats us → the phone must, or the ~7s watchdog resets the session. */
     override val requiresPhoneHeartbeat = true
+    /** Fill the whole 800x400 landscape panel (crop the 40px top/bottom margin AA leaves empty). */
+    override val fillCanvas = true
+    /** Verified from the bike's REQ_CONFIG_CAPTURE: it asks for an 800x400 capture. With AA at
+     *  800x480 this declares marginHeight=80, so AA keeps its UI in the visible 800x400 band. */
+    override val panelSize = 800 to 400
 
     /** Landscape ~800x400 panel → request AA landscape 800x480; the compositor fits it to 800x400. */
     override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)

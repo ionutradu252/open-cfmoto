@@ -14,10 +14,16 @@ android {
         applicationId = "dev.coletz.opencfmoto"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "0.1.2-cfdl16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The header shows the running version — after a bike test it's the fastest way to be sure
+    // which build is actually on the phone.
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

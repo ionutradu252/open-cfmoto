@@ -81,6 +81,10 @@ class EasyConnProber(
     @Volatile private var negW = 800
     @Volatile private var negH = 384
     @Volatile private var framesSent = 0
+
+    /** Live status for the on-screen status row. */
+    val bikeConnected: Boolean get() = running && probed
+    val framesSentCount: Int get() = framesSent
     @Volatile private var touchMoves = 0
 
     fun start(network: Network?) {

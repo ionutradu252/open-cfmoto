@@ -68,6 +68,7 @@ class VideoPipeline(
     // When set, the drain loop discards encoder output until the next keyframe, so the first frame a
     // freshly-attached bike client receives is a full SPS+PPS+IDR. See onBikeDataStart().
     @Volatile private var awaitKeyframe = false
+    private var resyncs = 0   // count of "bike behind" resyncs (drain thread only)
 
     // Diagnostic: dump the exact Annex-B H.264 access units we send to the bike into a .h264 file so
     // the stream can be inspected off-device (ffprobe/ffmpeg). Bounded to DUMP_CAP frames so it never
@@ -276,10 +277,21 @@ class VideoPipeline(
                         if (isKey) awaitKeyframe = false
                         val out = if (isKey && codecConfig != null) codecConfig!! + bytes else bytes
                         writeDump(out)
-                        // Keep the queue fresh: if full, drop oldest so we never lag far behind.
                         if (!frameQueue.offerLast(out)) {
-                            frameQueue.pollFirst()
-                            frameQueue.offerLast(out)
+                            // Queue full → the bike is consuming slower than we encode. Blindly dropping
+                            // the oldest frame would break the H.264 P-frame chain and leave the dash
+                            // GREEN until the next scheduled keyframe (~1s). Instead resync cleanly: drop
+                            // the whole backlog and force an immediate IDR, so the bike restarts decoding
+                            // on a fresh keyframe within a frame or two. Guarded so one overflow episode
+                            // requests just one keyframe (awaitKeyframe drops P-frames until it lands).
+                            frameQueue.clear()
+                            if (!awaitKeyframe) {
+                                awaitKeyframe = true
+                                requestSyncFrameNow()
+                                resyncs++
+                                if (resyncs <= 3 || resyncs % 30 == 0)
+                                    log("[VIDEO] bike behind → resync #$resyncs (drop backlog + force IDR)")
+                            }
                         }
                     }
                 }
@@ -298,6 +310,9 @@ class VideoPipeline(
 
     /** Compositor mode: the surface the AA decoder renders into (letterboxed before the encoder). */
     fun decoderInputSurface(): android.view.Surface? = aaCompositor?.inputSurface
+
+    /** Re-apply the fill/letterbox display mode live (from the in-app toggle). */
+    fun refreshDisplayMode() { aaCompositor?.refreshViewport() }
 
     /** Compositor mode: map a bike-canvas touch point to Android Auto source coords (letterbox-aware);
      *  null if the point is in a black bar. See AaCompositor.mapCanvasToSource. */
@@ -329,6 +344,17 @@ class VideoPipeline(
             log("[VIDEO] bike attached → flushed queue + requested IDR (first frame will be a keyframe)")
         } catch (e: Exception) {
             log("[VIDEO] requestKeyframe failed: $e")
+        }
+    }
+
+    /** Ask the encoder to emit an immediate keyframe (IDR) on its next output buffer. */
+    private fun requestSyncFrameNow() {
+        try {
+            codec?.setParameters(android.os.Bundle().apply {
+                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            })
+        } catch (e: Exception) {
+            log("[VIDEO] requestSyncFrame failed: $e")
         }
     }
 

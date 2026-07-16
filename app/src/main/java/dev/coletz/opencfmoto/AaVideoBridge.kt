@@ -24,4 +24,20 @@ object AaVideoBridge {
      * when no AA session is active (touches are then dropped).
      */
     @Volatile var touchSink: ((action: Int, canvasX: Int, canvasY: Int) -> Unit)? = null
+
+    /**
+     * Phone D-pad → Android Auto input bridge. MainActivity's on-screen buttons call this with an
+     * Android keycode (see [dev.coletz.opencfmoto.aa.AaInput] KEY_* constants); the live AA session
+     * ([AaReceiver]) installs a sink that forwards it over the AAP INPUT channel so Maps/Waze can be
+     * navigated from the phone (needed because this dash is non-touch). Null when no AA session is
+     * active (presses are then dropped with a log line).
+     */
+    @Volatile var keySink: ((keycode: Int) -> Unit)? = null
+
+    /**
+     * Rotary-knob → Android Auto bridge. AA treats this dash as a rotary head unit, where the KNOB
+     * (not the D-pad) steps focus through list items. delta -1 = rotate back, +1 = forward. Wired to
+     * the app's ⟲/⟳ buttons and the bike's track-skip buttons. Null when no AA session is active.
+     */
+    @Volatile var scrollSink: ((delta: Int) -> Unit)? = null
 }

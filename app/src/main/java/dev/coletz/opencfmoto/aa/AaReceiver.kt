@@ -38,6 +38,7 @@ class AaReceiver(
         fallbackHeight = ServiceDiscoveryResponse.AA_HEIGHT
         onFpsChanged = { fps ->
             log("[AA] decode fps=$fps")
+            dev.coletz.opencfmoto.AppStatus.aaFps = fps
             if (!steadyVideoFired && fps >= 25) {
                 steadyVideoFired = true
                 log("[AA] steady video reached (fps=$fps) — signalling ready for bike hand-off")
@@ -71,7 +72,11 @@ class AaReceiver(
 
     fun stop() {
         running = false
+        try { transport?.microphone?.stop("receiver stop") } catch (_: Exception) {}
+        dev.coletz.opencfmoto.AppStatus.aaConnected = false
         AaVideoBridge.touchSink = null
+        AaVideoBridge.keySink = null
+        AaVideoBridge.scrollSink = null
         try { transport?.quit() } catch (_: Exception) {}
         transport = null
         try { connection?.disconnect() } catch (_: Exception) {}
@@ -110,7 +115,12 @@ class AaReceiver(
         val t = AapTransport(videoDecoder, context)
         t.onQuit = { clean ->
             log("[AA] transport quit (clean=$clean, userExit=${t.wasUserExit})")
+            try { t.microphone?.stop("transport quit") } catch (_: Exception) {}
+            t.microphone = null
+            dev.coletz.opencfmoto.AppStatus.aaConnected = false
             AaVideoBridge.touchSink = null
+            AaVideoBridge.keySink = null
+            AaVideoBridge.scrollSink = null
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
@@ -121,6 +131,10 @@ class AaReceiver(
         // Bike touchscreen → Android Auto: EasyConnProber decodes dash touches (PXC cmdType 32) and
         // calls this sink with raw bike-canvas coords + a normalised action. Letterbox-map into AA
         // video space and forward over the AAP INPUT channel. Dropped if the point is in a black bar.
+        // Present the phone's microphone as the head unit's, so the Assistant works (hands-free
+        // destination entry). AA drives it via MICROPHONE_REQUEST — see AapControl.
+        t.microphone = AaMicrophone(context, t, log)
+
         val input = AaInput(t, log)
         var loggedTouchMap = false
         AaVideoBridge.touchSink = { action, cx, cy ->
@@ -133,6 +147,10 @@ class AaReceiver(
                 input.sendTouch(action, mapped.first, mapped.second)
             }
         }
+        // Phone on-screen D-pad → Android Auto (for non-touch dashes). MainActivity calls this.
+        AaVideoBridge.keySink = { keycode -> input.sendKey(keycode) }
+        // Rotary knob emulation — the primary way to step focus through AA's lists.
+        AaVideoBridge.scrollSink = { delta -> input.sendScroll(delta) }
 
         log("[AA] starting AAP handshake (version + SSL)…")
         if (!t.startHandshake(conn)) {
@@ -142,6 +160,7 @@ class AaReceiver(
             connection = null
             return
         }
+        dev.coletz.opencfmoto.AppStatus.aaConnected = true
         log("[AA] handshake OK — pointing decoder at encoder surface and starting read loop")
         videoDecoder.setSurface(encoderSurface)
         t.startReading()

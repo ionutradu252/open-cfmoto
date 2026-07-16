@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drive the dash from the phone. Only useful with a live session, so it swaps to an empty
+     state until Android Auto is actually connected. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ScrollView
+        android:id="@+id/control_body"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <!-- Knob first: on a rotary head unit this is the primary navigation. -->
+            <com.google.android.material.card.MaterialCardView style="@style/StepCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/SettingsSection"
+                        android:paddingTop="4dp"
+                        android:text="ROTARY KNOB" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_scroll_back"
+                            style="@style/PadKey.Filled"
+                            android:text="⟲ Prev" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_scroll_fwd"
+                            style="@style/PadKey.Filled"
+                            android:text="Next ⟳" />
+                    </LinearLayout>
+
+                    <TextView
+                        style="@style/SettingsHint"
+                        android:paddingTop="6dp"
+                        android:text="Steps focus through lists — this is what actually moves the highlight inside menus." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- D-pad -->
+            <com.google.android.material.card.MaterialCardView style="@style/StepCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/SettingsSection"
+                        android:paddingTop="4dp"
+                        android:text="D-PAD" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_back" style="@style/PadKey.Outlined" android:text="Back" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_up" style="@style/PadKey" android:text="▲" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_home" style="@style/PadKey.Outlined" android:text="Home" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_left" style="@style/PadKey" android:text="◀" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_enter" style="@style/PadKey.Filled" android:text="OK" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_right" style="@style/PadKey" android:text="▶" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_key_down" style="@style/PadKey" android:text="▼" />
+
+                        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                    </LinearLayout>
+
+                    <TextView
+                        style="@style/SettingsHint"
+                        android:paddingTop="6dp"
+                        android:text="Arrows jump between panes (app list ↔ taskbar). Use the knob to move within one." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Voice -->
+            <com.google.android.material.card.MaterialCardView style="@style/StepCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/SettingsSection"
+                        android:paddingTop="4dp"
+                        android:text="VOICE" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_key_assistant"
+                        android:layout_width="match_parent"
+                        android:layout_height="58dp"
+                        android:layout_margin="3dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="🎤  Assistant"
+                        android:textSize="15sp"
+                        app:cornerRadius="16dp" />
+
+                    <TextView
+                        android:id="@+id/tv_mic_status"
+                        style="@style/SettingsHint"
+                        android:paddingTop="8dp"
+                        tools:text="Microphone ready." />
+
+                    <TextView
+                        style="@style/SettingsHint"
+                        android:paddingTop="4dp"
+                        android:text="Speak into your helmet mic — Android Auto hears it through the phone. To reach this from the bars, map a double tap to Assistant in Settings → Customize buttons." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Empty state: no session, no point showing dead keys. -->
+    <LinearLayout
+        android:id="@+id/control_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✛"
+            android:textSize="44sp"
+            android:textColor="?attr/colorOutline" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="No Android Auto session"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="?attr/colorOnSurface" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text="Connect on the first tab — the controls light up once the dash is projecting." />
+    </LinearLayout>
+</FrameLayout>

@@ -27,6 +27,7 @@ class AndroidAutoService : Service() {
     private var pipeline: VideoPipeline? = null
     private var receiver: AaReceiver? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var mediaButtons: MediaButtonBridge? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -96,6 +97,8 @@ class AndroidAutoService : Service() {
             pipeline = vp
             AaVideoBridge.pipeline = vp
             receiver = AaReceiver(applicationContext, surface, LogBus::log).also { it.start() }
+            // Capture Bluetooth/media hardware buttons (bike handlebar buttons) → AA navigation.
+            mediaButtons = MediaButtonBridge(applicationContext, LogBus::log).also { it.start() }
         } catch (e: Exception) {
             LogBus.log("[AA] receiver start failed: $e")
             stopSelf()
@@ -104,6 +107,8 @@ class AndroidAutoService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        try { mediaButtons?.stop() } catch (_: Exception) {}
+        mediaButtons = null
         try { receiver?.stop() } catch (_: Exception) {}
         receiver = null
         AaVideoBridge.pipeline = null

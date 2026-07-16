@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every tweakable, with the reason for it underneath. Each control writes straight through to its
+     persisted store and applies to the running session where that's possible. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="24dp">
+
+        <!-- ── Display ── -->
+        <TextView style="@style/SettingsSection" android:text="DISPLAY" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_fill_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Fill the whole screen"
+            android:textSize="15sp" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Crops a little top and bottom to use every pixel of the dash. Off = letterbox, whole picture with black bars." />
+
+        <!-- ── Controls ── -->
+        <TextView style="@style/SettingsSection" android:text="HANDLEBAR BUTTONS" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_button_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Bike buttons drive Android Auto"
+            android:textSize="15sp" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Volume ▲▼ becomes the knob, enter becomes OK, double ▼▼ = Back, double ▲▲ = Home — all of it remappable below.\n\nCost: Android hands the media buttons to one app at a time, so while this is on your music player pauses and the buttons stop skipping tracks. Turn it off to get normal music control back." />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_button_mapping"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Customize buttons…" />
+
+        <!-- ── Audio ── -->
+        <TextView style="@style/SettingsSection" android:text="AUDIO" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_aa_audio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:enabled="false"
+            android:text="Android Auto audio through the bike"
+            android:textSize="15sp" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Not built yet — the switch is here for when it is. Today Android Auto's audio (nav voice, media) plays from the phone straight to your helmet over Bluetooth, which is why sound already works." />
+
+        <!-- ── Connection ── -->
+        <TextView style="@style/SettingsSection" android:text="CONNECTION" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_auto_connect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="Connect when the app opens"
+            android:textSize="15sp" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Starts Android Auto straight away using the saved bike — no QR, no button." />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_reconnect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="6dp"
+            android:text="Rejoin after an ignition cycle"
+            android:textSize="15sp" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Kill the ignition and the bike's Wi-Fi vanishes. This waits for it to come back and rejoins by itself instead of you having to Stop and Start. It backs off between tries and gives up after a while, so it isn't sitting there burning battery." />
+
+        <!-- ── Advanced ── -->
+        <TextView style="@style/SettingsSection" android:text="ADVANCED" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_aa_settings"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Open Android Auto settings" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:paddingTop="6dp"
+            android:text="Android Auto must have &quot;Add new cars to Android Auto&quot; enabled, and developer mode helps if the dash stays black." />
+
+        <TextView
+            android:id="@+id/tv_profile_info"
+            style="@style/SettingsHint"
+            android:paddingTop="16dp"
+            android:fontFamily="monospace"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>

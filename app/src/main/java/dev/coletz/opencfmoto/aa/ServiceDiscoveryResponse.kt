@@ -8,6 +8,7 @@ package dev.coletz.opencfmoto.aa
 
 import com.google.protobuf.Message
 import dev.coletz.opencfmoto.AaResolution
+import dev.coletz.opencfmoto.AaVideoSpec
 import dev.coletz.opencfmoto.BikeProfileHolder
 import dev.coletz.opencfmoto.aa.proto.Common
 import dev.coletz.opencfmoto.aa.proto.Control
@@ -62,8 +63,13 @@ class ServiceDiscoveryResponse
                             codecResolution = protoResolution(spec.resolution)
                             frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30
                             setDensity(spec.dpi)
-                            setMarginWidth(0)
-                            setMarginHeight(0)
+                            // AA only renders at fixed resolutions, so an 800x400 panel can't match
+                            // 800x480 exactly. Declare the difference as margins: AA then keeps its
+                            // UI inside the visible band and leaves the rest empty, and the
+                            // compositor's fill/crop removes exactly that empty band — perfect fit,
+                            // nothing real cropped. See BikeProfile.panelSize.
+                            setMarginWidth(marginW(spec))
+                            setMarginHeight(marginH(spec))
                             setVideoCodecType(Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP)
                         }.build()
                     )
@@ -74,10 +80,19 @@ class ServiceDiscoveryResponse
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_INP
                 service.inputSourceService = Control.Service.InputSourceService.newBuilder().also { inp ->
-                    inp.touchscreen = Control.Service.InputSourceService.TouchConfig.newBuilder().apply {
-                        setWidth(spec.width)
-                        setHeight(spec.height)
-                    }.build()
+                    // D-pad / rotary keycodes so the phone's on-screen buttons can drive AA. Advertising
+                    // these makes Android Auto render a focus-navigable UI (highlighted items), which is
+                    // the only way to control it on a non-touch dash.
+                    AaInput.SUPPORTED_KEYCODES.forEach { inp.addKeycodesSupported(it) }
+                    // Advertise a touchscreen only on dashes that actually have one. On a non-touch dash
+                    // (supportScreenTouch=false) advertising touch would put AA in touch mode with no
+                    // on-screen focus for the D-pad to move.
+                    if (BikeProfileHolder.active.supportsScreenTouch) {
+                        inp.touchscreen = Control.Service.InputSourceService.TouchConfig.newBuilder().apply {
+                            setWidth(spec.width)
+                            setHeight(spec.height)
+                        }.build()
+                    }
                 }.build()
             }.build())
 
@@ -139,6 +154,13 @@ class ServiceDiscoveryResponse
                 addAllServices(services)
             }.build()
         }
+
+        /** Empty band AA should leave on each axis so its UI stays inside the dash's real panel. */
+        private fun marginW(spec: AaVideoSpec): Int =
+            BikeProfileHolder.active.panelSize?.let { (spec.width - it.first).coerceAtLeast(0) } ?: 0
+
+        private fun marginH(spec: AaVideoSpec): Int =
+            BikeProfileHolder.active.panelSize?.let { (spec.height - it.second).coerceAtLeast(0) } ?: 0
 
         private fun makeSensorType(type: Sensors.SensorType): Control.Service.SensorSourceService.Sensor =
             Control.Service.SensorSourceService.Sensor.newBuilder().setType(type).build()

@@ -72,6 +72,12 @@ class AaCompositor(private val log: (String) -> Unit) {
     @Volatile private var hasContent = false
     private var lastDrawMs = 0L
     private val KEEPALIVE_INTERVAL_MS = 66L  // ~15 fps floor to the bike
+    // Cap the frames we hand the encoder to ~22 fps. The bike pulls the data socket at ~24 fps; feeding
+    // it the AA decoder's full ~30 fps overruns the send queue, and a dropped H.264 P-frame turns the
+    // dash green until the next keyframe. Sampling just under the bike's pull rate keeps the queue from
+    // ever backing up. updateTexImage still runs every frame (so the AA decoder never stalls) — we just
+    // skip the GL draw/encode for frames that arrive too soon.
+    private val MIN_DRAW_INTERVAL_MS = 45L
 
     // Full-screen quad (triangle strip): pos.xy + tex.uv interleaved.
     private val quad: FloatBuffer = ByteBuffer
@@ -107,6 +113,16 @@ class AaCompositor(private val log: (String) -> Unit) {
         latch.await()
     }
 
+    /** Recompute the fit (fill ↔ letterbox) and redraw the last frame — for the live in-app toggle. */
+    fun refreshViewport() {
+        handler.post {
+            computeViewport()
+            val mode = if (DisplayMode.effective()) "fill(crop)" else "letterbox"
+            log("[COMPOSITOR] display mode → $mode rect=${vpW}x$vpH @($vpX,$vpY)")
+            if (hasContent && windowSurface != EGL14.EGL_NO_SURFACE) drawFrame()
+        }
+    }
+
     /** Point the compositor at the encoder's input surface, sized to the bike canvas. */
     fun setOutput(encoderSurface: Surface, cw: Int, ch: Int, sw: Int, sh: Int) {
         handler.post {
@@ -119,7 +135,8 @@ class AaCompositor(private val log: (String) -> Unit) {
                 windowSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, encoderSurface, attrs, 0)
                 canvasW = cw; canvasH = ch; srcW = sw; srcH = sh
                 computeViewport()
-                log("[COMPOSITOR] output set canvas=${cw}x$ch src=${sw}x$sh → letterbox rect=${vpW}x$vpH @($vpX,$vpY)")
+                val mode = if (DisplayMode.effective()) "fill(crop)" else "letterbox"
+                log("[COMPOSITOR] output set canvas=${cw}x$ch src=${sw}x$sh → $mode rect=${vpW}x$vpH @($vpX,$vpY)")
             } catch (e: Exception) {
                 log("[COMPOSITOR] setOutput failed: $e")
             }
@@ -142,19 +159,26 @@ class AaCompositor(private val log: (String) -> Unit) {
         return sx to sy
     }
 
-    /** Fit src aspect inside the canvas, centered (letterbox). */
+    /**
+     * Compute the viewport that maps the AA source into the bike canvas. Two modes (per the active
+     * [BikeProfile.fillCanvas]):
+     *   letterbox — fit inside, aspect-preserved, centered (viewport ≤ canvas, black bars).
+     *   fill      — cover the canvas, aspect-preserved, centered (viewport ≥ canvas; glViewport clips
+     *               the overflow, so no bars but ~edges cropped).
+     */
     private fun computeViewport() {
         if (canvasW == 0 || canvasH == 0 || srcW == 0 || srcH == 0) return
         val srcAspect = srcW.toFloat() / srcH
         val canvasAspect = canvasW.toFloat() / canvasH
-        if (srcAspect < canvasAspect) {
-            // source narrower than canvas → fit height, black bars left/right
-            vpH = canvasH
-            vpW = Math.round(canvasH * srcAspect)
-        } else {
-            // source wider → fit width, black bars top/bottom
+        val fill = DisplayMode.effective()
+        // Letterbox fits the limiting dimension; fill covers by fitting the OTHER dimension.
+        val fitWidth = if (fill) srcAspect < canvasAspect else srcAspect >= canvasAspect
+        if (fitWidth) {
             vpW = canvasW
             vpH = Math.round(canvasW / srcAspect)
+        } else {
+            vpH = canvasH
+            vpW = Math.round(canvasH * srcAspect)
         }
         vpX = (canvasW - vpW) / 2
         vpY = (canvasH - vpH) / 2
@@ -167,6 +191,9 @@ class AaCompositor(private val log: (String) -> Unit) {
             return
         }
         hasContent = true
+        // Rate-cap the encode (see MIN_DRAW_INTERVAL_MS): consume every decoded frame but only
+        // draw/encode the newest at ~22 fps so the bike's slower pull never backs the queue up.
+        if (android.os.SystemClock.uptimeMillis() - lastDrawMs < MIN_DRAW_INTERVAL_MS) return
         drawFrame()
     }
 

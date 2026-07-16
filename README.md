@@ -1,152 +1,85 @@
-# OpenCfMoto — User Guide
+# OpenCfMoto - 450SR — forked from [BojanJ](https://github.com/BojanJ/open-cfmoto/)
 
-Put **Google Maps / Waze (via Android Auto)** on your CFMoto MotoPlay dashboard, wirelessly, without
-rooting your phone. You can also mirror your whole phone screen to the dash.
+## download from [releases](https://github.com/ionutradu252/open-cfmoto/releases)
 
-> ⚠️ **This is a proof-of-concept / hobby project, not a polished product.** It was built and tested
-> against a CFMoto **800MT** dash and a **Pixel 9**. It may glitch, need a retry, or not work on other
-> bikes/phones. Don't rely on it for critical navigation, and set up your route **before** you start
-> riding. Use at your own risk.
+Android Auto on the 2025 CFMOTO 450SR dash — model id `66660742`, CFDL16 display (landscape),
+sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 
----
+## fixes + new features
 
-## 1. What you need
+**connection**
+- fixes for wifi-direct, added profile for 2025 CFMOTO 450SR — the dash hands out a
+  `DIRECT-go-CFMOTO-…` SSID with no default route, so the bike is now found at `.1` of the phone's own
+  /24 (it just aborted before this)
+- phone emits a handshake/heartbeat so the headunit doesn't disconnect and reconnect after ~7 seconds
+  (this dash never sends its own heartbeat, so the control socket sat idle and its watchdog killed the
+  session)
+- **QR is remembered** — auto-connects when you open the app, no scanning. Re-joins by itself if you
+  switch the bike off and back on, and gives up after ~2 min with no bike so it doesn't drain battery
 
-- **A CFMoto motorcycle with a MotoPlay / EasyConnect touchscreen dash.**
-  Confirmed working: **800MT** (CFDL26 dash). Other models (e.g. the 675 SR-R / CFDL16) may work
-  partially or not at all.
-- **An Android phone**, Android **10 or newer**. (Tested on a Pixel 9.)
-- **Google Android Auto** installed from the Play Store and set up once (see step 3). Android Auto is
-  what actually runs Maps/Waze — OpenCfMoto just relays its screen to the bike.
-- **The OpenCfMoto app** (`app-debug.apk`) — you install this manually (step 2).
-- A **mobile-data plan** is recommended: the phone joins the bike's Wi-Fi for the dash link, so live
-  maps/traffic come over cellular.
+**picture**
+- **green flashing fixed** — the encoder outran the dash's ~24 fps pull, and each dropped frame broke
+  the H.264 chain until the next keyframe. Now paced to the dash, and a forced keyframe on overrun
+- **fills the whole screen with nothing cropped** — Android Auto can't render 800x400, so it's told to
+  keep its UI inside the visible band (margins) and the leftover band is cropped away
+- fill ↔ letterbox toggle, applies live
 
-No root, no VPN, no PC required to ride.
+**control** (this dash is not a touchscreen)
+- **handlebar buttons drive Android Auto.** The buttons never appear on the PXC link — they reach the
+  phone as Bluetooth AVRCP. Defaults: press ▲/▼ = knob (step through lists), enter = select,
+  double-tap ▼▼ = back, double-tap ▲▲ = home. Toggle in Settings; off = normal music/volume
+- **every gesture is remappable** (Settings → Customize buttons), with a reset to defaults. All five
+  usable gestures × every action Android Auto accepts — knob, D-pad, select, back, home, Assistant,
+  do-nothing — plus **navigate to a saved place**: put an address in a slot, map it to a button, and
+  that button starts turn-by-turn there with the phone in your pocket (needs "Display over other
+  apps", since Android blocks background apps from opening Maps). Want voice from the bars? Map a
+  double tap to Assistant
+- a double tap is read from the *size* of the volume jump (±3 steps or more from the pin), not from
+  two events arriving close together: the dash coalesces both presses into ONE absolute-volume
+  message, so the timing-based version could never fire
+- media focus is re-asserted once the bike link is up, so the dash re-reads the player it first saw
+  ~8 s too early (this is what manually toggling the switch off and on was working around)
+- on-screen D-pad + rotary knob in the app
+- **"Navigate to…"** — type an address, turn-by-turn shows up on the dash, no on-dash interaction
+- Android Auto is declared as a rotary head unit, otherwise it renders no focus highlight to move
 
----
+**voice**
+- **microphone works** — the phone is presented to Android Auto as the head unit's mic, so the
+  Assistant can hear you. Capture prefers the Bluetooth headset (Cardo → bike → phone) over the
+  phone's own mic. Two quick presses of the handlebar enter opens the Assistant; there's a button in
+  the app too
 
-## 2. Install the OpenCfMoto app
+**app**
+- four-tab Material 3 UI — Connect (pair → connect → navigate), Control (knob / D-pad / voice),
+  Settings, Logs — with a live status header (AA / fps / bike / frames) and an in-app tutorial
+- log mirroring and the status refresh stop when the app isn't on screen, so a pocketed phone with
+  the screen off isn't paying for UI it isn't showing
+- logs for HID (buttons) input — kept for future dashes; the 450SR sends nothing over PXC
 
-The app isn't on the Play Store — you sideload the APK.
+## current bugs
+- **Android Auto audio not routed through the bike** — AA's own audio is discarded on our side. In
+  practice sound still works, because AA plays through the phone → bluetooth → bike → helmet. The
+  switch for routing it properly is in Settings, disabled until it's built
+- **while the bike-button toggle is on your music player pauses** — Android gives the media buttons
+  to exactly one app, so taking them takes them from your player. Toggle it off for normal music
+- **holding ▲/▼ does nothing while projecting.** The hold arrives fine (the dash sends it as
+  next/previous track, even mid-projection) but Android Auto ignores whatever we forward from it, so
+  the gesture is gone from the mapping list. Short-press ▲/▼ does the same job anyway
+- **no double-press of enter.** The dash won't emit two play/pause events close enough together to
+  tell a double from two singles, so that gesture doesn't exist. Use a volume double tap for the
+  Assistant
+- occasional brief video stutter under heavy input (no disconnect)
 
-1. On your phone, download the latest **`OpenCfMoto.apk`** from the
-   **[Releases page](https://github.com/BojanJ/open-cfmoto/releases/latest)**
-   (direct link: <https://github.com/BojanJ/open-cfmoto/releases/latest/download/OpenCfMoto.apk>).
-2. Tap it in a file manager / your browser's downloads to install.
-3. Android will warn that it's from an "unknown source" — allow installation for your browser/file
-   manager when prompted (Settings ▸ Apps ▸ *(that app)* ▸ *Install unknown apps*).
-4. Open **Open CfMoto** once. When asked, **grant the permissions** it requests:
-   - **Location** — required by Android to join the bike's Wi-Fi. (The app doesn't track you.)
-   - **Camera** — to scan the bike's pairing QR code.
-   - **Notifications** — so it can keep running in the background while you ride.
-   - **Bluetooth** — optional, currently unused; you can deny it.
-
----
-
-## 3. One-time Android Auto setup
-
-Android Auto must be installed, set up, and allowed to start in "self / head-unit" mode.
-
-1. Install **Android Auto** from the Play Store (on many phones it's pre-installed) and open it once to
-   accept its terms / initial setup.
-2. **Enable Android Auto Developer Mode:** open Android Auto's settings (in OpenCfMoto you can tap the
-   **AA Settings** button to jump there), scroll to the bottom and tap **Version** about **10 times**
-   until it says developer mode is enabled.
-3. Open the **⋮ (Developer settings)** menu that now appears and make sure head-unit / unknown-car
-   projection is allowed (the exact wording varies by Android Auto version — e.g. *"Add new cars to
-   Android Auto"* / *"Unknown sources"* should be **on**).
-
-You only do this once.
-
----
-
-## 4. Ride setup — put Android Auto on the dash
-
-Do this while parked. It takes about a minute the first time.
-
-1. **On the bike dash:** open the **MotoPlay / phone-connection (EasyConnect) screen** so it shows its
-   **pairing QR code**. (This is the same QR the official CFMoto app uses.)
-2. **On the phone:** open **Open CfMoto** and tap **`Start AA`**.
-3. The **QR scanner** opens — point it at the dash's QR code. The app reads your bike model and Wi-Fi
-   from it and starts the Android Auto receiver.
-4. Android Auto spins up in the background (you'll see log lines like `steady video reached`). After a
-   few seconds the phone pops a **Wi-Fi dialog** asking to connect to your bike's hotspot
-   (e.g. *"CFMOTO1565"*) — tap **Connect / Allow**.
-5. The dash connects and **Android Auto appears on the dashboard**. 🎉
-
-From now on you drive Android Auto **from the dash touchscreen** — tap and scroll on the bike screen to
-control Maps/Waze. Your phone can be locked or in your pocket; the app keeps the link alive via a
-persistent notification.
-
-**To stop:** tap **`Stop`** in the app (or use the notification). This ends projection and disconnects
-from the bike Wi-Fi so your phone returns to normal.
+## versions
+- **v0.1.2-cfdl16** — bike buttons (volume→knob, enter→select, double-tap→back/home) now fully
+  remappable + navigate-to-a-saved-place, microphone + Assistant, no-crop fill via margins, green
+  flashing fixed, auto-connect + auto-reconnect, four-tab Material 3 UI with tutorial,
+  "Navigate to…" box, status header
+- **v0.1.1-cfdl16** — wifi-direct + 450SR profile, heartbeat fix, HID input logging
 
 ---
 
-## 5. Alternative: mirror the whole phone screen
-
-If you'd rather show your entire phone screen on the dash (any app, not just Android Auto):
-
-1. Tap **`Start Mirror`**.
-2. Approve the **"Start recording / casting"** screen-capture prompt.
-3. Scan the bike QR when the scanner opens, and accept the Wi-Fi dialog as in step 4 above.
-
-Mirroring shows everything on your phone, keeps the phone screen on, and uses more battery — Android
-Auto mode (section 4) is the recommended way to navigate.
-
----
-
-## 6. The buttons
-
-| Button | What it does |
-| --- | --- |
-| **Start AA** | The main mode — scan the bike QR, then project **Android Auto** to the dash. |
-| **Start Mirror** | Mirror your **whole phone screen** to the dash instead. |
-| **Stop** | Stop everything and disconnect from the bike Wi-Fi. |
-| **AA Settings** | Opens Google Android Auto's settings (handy for step 3). |
-| **Share Logs** | Exports a diagnostic log you can send if you need help (see below). |
-| **Clear Logs** | Clears the on-screen log. |
-
-The dark panel filling most of the screen is a **live log** — normal to see lots of text; it's for
-troubleshooting.
-
----
-
-## 7. What's normal, and troubleshooting
-
-**Normal behavior**
-- A short black/blank moment on the dash while it connects — then the map appears.
-- When you open **All Apps** on the dash or **take/receive a phone call**, the dash may **freeze for a
-  couple of seconds**, then resume. This is expected.
-- Navigation **voice prompts** come out of your phone / paired helmet headset, not the bike speakers.
-
-**If something's wrong**
-
-| Symptom | Try this |
-| --- | --- |
-| Dash stays **black** after connecting | Tap **Stop**, then **Start AA** again and re-scan the QR. Make sure the dash is on its phone-connection screen. |
-| **No Wi-Fi dialog** appears / it won't connect | Confirm you accepted the location permission; move the phone next to the bike; tap **Stop** and retry. Some phones show the dialog behind Android Auto — swipe back to OpenCfMoto to find it. |
-| **"Android Auto" never starts** | Re-check section 3 (developer mode + unknown sources). Open **AA Settings** and confirm Android Auto itself works. |
-| Dash **froze and didn't recover** | Tap **Stop**, then **Start AA** again. |
-| Wrong bike detected / odd resolution | Make sure you scanned **your** dash's QR (not an old screenshot). |
-
-**Getting help:** reproduce the problem, then tap **Share Logs** and send the log file (e.g. to
-yourself or the project). The log describes each step and makes issues diagnosable. See the project's
-Reddit thread linked in the README.
-
----
-
-## 8. Good to know / limitations
-
-- **Set your destination before riding.** Enter navigation while parked.
-- **Single-finger touch** (tap and swipe) is supported on the dash — no pinch-to-zoom yet; use the on
-  screen **＋ / −** map buttons to zoom.
-- Works over the bike's **Wi-Fi**; keep the phone reasonably close to the dash.
-- It's a hobby PoC — expect occasional hiccups and the odd need to **Stop → Start** again.
-- No root and no PC required.
-
----
+*thanks a lot to [BojanJ](https://github.com/BojanJ/open-cfmoto/) for the work*
 
 *OpenCfMoto builds on the excellent [headunit-revived](https://github.com/andreknieriem/headunit-revived)
 project. See the `docs/` folder for the technical/architecture write-ups.*

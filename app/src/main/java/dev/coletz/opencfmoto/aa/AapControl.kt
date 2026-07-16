@@ -41,8 +41,11 @@ internal class AapControlMedia(private val aapTransport: AapTransport) : AapCont
                 return 0
             }
             Media.MsgType.MEDIA_MESSAGE_MICROPHONE_REQUEST_VALUE -> {
-                // Mic not implemented (video-only). Acknowledge by ignoring.
-                AaLog.d("RX: Microphone request (ignored — mic not implemented)")
+                // AA wants the mic (Assistant starting/stopping). Open it and stream PCM back —
+                // voice is the only hands-free way to set a destination on a bike.
+                val req = message.parse(Media.MicrophoneRequest.newBuilder()).build()
+                AaLog.i("RX: Microphone request open=%b", req.open)
+                aapTransport.microphone?.onRequest(req.open, message.channel)
                 return 0
             }
             Media.MsgType.MEDIA_MESSAGE_UPDATE_UI_CONFIG_REPLY_VALUE -> {
@@ -58,6 +61,8 @@ internal class AapControlMedia(private val aapTransport: AapTransport) : AapCont
     private fun mediaStartRequest(request: Media.Start, channel: Int): Int {
         AaLog.i("Media Start Request %s: session=%d, config_index=%d", Channel.name(channel), request.sessionId, request.configurationIndex)
         aapTransport.setSessionId(channel, request.sessionId)
+        // The mic must echo this session id back in its MICROPHONE_RESPONSE.
+        if (channel == Channel.ID_MIC) aapTransport.microphone?.setSessionId(request.sessionId)
         return 0
     }
 

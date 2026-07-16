@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Android Auto's Assistant: we present the phone's mic as the head unit's microphone. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -19,6 +21,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Optional, and only for the handlebar "navigate to a saved place" buttons: Android blocks
+         background activity starts, so without this, pressing one while riding (app off screen)
+         silently does nothing. Requested from the Button mapping screen, never at startup. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />
@@ -27,6 +33,7 @@
     <queries>
         <package android:name="com.google.android.projection.gearhead" />
         <package android:name="com.google.android.gms" />
+        <package android:name="com.google.android.apps.maps" />
     </queries>
 
     <application
@@ -51,6 +58,10 @@
         <activity
             android:name=".QrScanActivity"
             android:exported="false" />
+        <activity
+            android:name=".ButtonMappingActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
         <service
             android:name=".ProjectionService"
             android:exported="false"

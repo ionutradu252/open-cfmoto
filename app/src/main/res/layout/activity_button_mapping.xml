@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/mapping_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        app:navigationIcon="@drawable/ic_back"
+        app:title="Button mapping" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="28dp">
+
+            <TextView style="@style/SettingsSection" android:paddingTop="8dp" android:text="HANDLEBAR GESTURES" />
+
+            <TextView
+                style="@style/SettingsHint"
+                android:text="Tap a gesture to change what it does. These only apply while “Bike buttons drive Android Auto” is on." />
+
+            <com.google.android.material.card.MaterialCardView
+                style="?attr/materialCardViewOutlinedStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                app:cardCornerRadius="18dp">
+
+                <LinearLayout
+                    android:id="@+id/mapping_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <TextView style="@style/SettingsSection" android:text="SAVED PLACES" />
+
+            <TextView
+                style="@style/SettingsHint"
+                android:text="Map a gesture to one of these and that button starts turn-by-turn there — the route appears on the dash without touching the phone. The address is whatever Google Maps accepts." />
+
+            <LinearLayout
+                android:id="@+id/places_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="4dp" />
+
+            <!-- Only shown when a nav action is mapped but Android would block the launch. -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/card_overlay"
+                style="?attr/materialCardViewFilledStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:visibility="gone"
+                app:cardCornerRadius="18dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="One permission needed"
+                        android:textSize="15sp"
+                        android:textStyle="bold"
+                        android:textColor="?attr/colorOnSurface" />
+
+                    <TextView
+                        style="@style/SettingsHint"
+                        android:paddingTop="6dp"
+                        android:text="Android blocks apps from opening Maps while they're off screen — which is exactly the situation you're in while riding. Allowing “Display over other apps” lifts that. Without it, a navigate button does nothing when the phone is in your pocket." />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_overlay"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Allow" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_reset"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Reset to defaults" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
