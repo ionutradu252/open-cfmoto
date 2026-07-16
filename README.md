@@ -23,8 +23,6 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 - **holding ▲/▼** (next/previous track) does nothing while Android Auto is on the screen
 - **double-pressing enter** does nothing — the dash can't send it quickly enough to tell it apart
   from two normal presses. Use a volume double tap instead
-- **no touch** — the 450SR dash isn't a touchscreen, so it's the handlebar buttons or your phone
-- **brief stutter** if you really mash the buttons. It doesn't disconnect
 - only tested on a 450SR with a Xiaomi 13 — other bikes/phones are a coin flip
 
 ## in app screenshots
