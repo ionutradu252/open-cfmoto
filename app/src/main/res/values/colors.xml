@@ -7,4 +7,7 @@
     <color name="status_live">#FF2E7D32</color>
     <color name="status_warn">#FFEF6C00</color>
     <color name="status_idle">#FF9E9E9E</color>
+
+    <!-- Launcher icon backdrop, sampled from the logo artwork. See ic_launcher_background.xml. -->
+    <color name="ic_launcher_bg">#FF0C2132</color>
 </resources>

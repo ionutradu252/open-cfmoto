@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.coletz.opencfmoto"
+    namespace = "dev.snaipdefix.opencflink"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -11,11 +11,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "dev.coletz.opencfmoto"
+        applicationId = "dev.snaipdefix.opencflink"
         minSdk = 29
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.1.2-cfdl16"
+        versionCode = 3
+        versionName = "0.1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

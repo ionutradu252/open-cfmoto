@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Open CfMoto"
+rootProject.name = "OpenCFLink"
 include(":app")
  

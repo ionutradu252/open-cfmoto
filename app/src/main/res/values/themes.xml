@@ -1,11 +1,11 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Base.Theme.OpenCfMoto" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Base.Theme.OpenCFLink" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
     </style>
 
-    <style name="Theme.OpenCfMoto" parent="Base.Theme.OpenCfMoto" />
+    <style name="Theme.OpenCFLink" parent="Base.Theme.OpenCFLink" />
 
     <!-- ── Status header: three equal stat blocks separated by hairlines ── -->
     <style name="StatBlock">

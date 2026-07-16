@@ -31,6 +31,20 @@
             style="@style/SettingsHint"
             android:text="Crops a little top and bottom to use every pixel of the dash. Off = letterbox, whole picture with black bars." />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_video_quality"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Picture quality…" />
+
+        <TextView
+            android:id="@+id/tv_video_quality"
+            style="@style/SettingsHint"
+            android:paddingTop="6dp"
+            android:text="If the dash's Wi-Fi is on 2.4 GHz it shares the band with your helmet's Bluetooth, so a busy map can stutter your music — the faster you ride, the more the map moves. Turn this down to give the audio room. Applies on the next connect." />
+
         <!-- ── Controls ── -->
         <TextView style="@style/SettingsSection" android:text="HANDLEBAR BUTTONS" />
 

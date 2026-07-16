@@ -1,9 +1,15 @@
-# OpenCfMoto - 450SR — forked from [BojanJ](https://github.com/BojanJ/open-cfmoto/)
+# OpenCFLink — Android Auto on CFMoto dashes
 
 ## download from [releases](https://github.com/ionutradu252/open-cfmoto/releases)
+<img src="./docs/IMG_20260716_135927.jpg" width="300">
 
-Android Auto on the 2025 CFMOTO 450SR dash — model id `66660742`, CFDL16 display (landscape),
-sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
+**2025 CFMOTO 450SR** — model id `66660742`, CFDL16 display (landscape, 800x400), sdkVersion
+`0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
+
+**CFMOTO 800NK** — model id `37426`, CFDL26 `2.3.0.5`, 720x712 touchscreen.
+
+Other CFMoto dashes may work — the app picks a screen profile from the bike itself, and falls back to
+a safe default it doesn't fit. Send a log if yours looks wrong.
 
 ## what works
 - **Android Auto on the bike's screen** — Maps, Waze, Spotify, whatever you already use
@@ -20,10 +26,13 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 ## what doesn't
 - **your music pauses while the handlebar buttons are set to drive Android Auto.** Android only lets
   one app own those buttons at a time. Switch it off in Settings when you want music control back
-- **holding ▲/▼** (next/previous track) does nothing while Android Auto is on the screen
+- **holding ▲/▼** (next/previous track) does nothing on the 450SR while Android Auto is on the
+  screen. On the 800NK those same keys are a plain ▲/▼ press and they do work
 - **double-pressing enter** does nothing — the dash can't send it quickly enough to tell it apart
   from two normal presses. Use a volume double tap instead
-- only tested on a 450SR with a Xiaomi 13 — other bikes/phones are a coin flip
+- only really tested on a 450SR (Xiaomi 13) and an 800NK (Samsung S948B) — other bikes are a coin
+  flip. The 800MT shares the 800NK's model id and can't be told apart until it connects, so it will
+  currently be handed the 800NK's screen geometry
 
 ## in app screenshots
 <img src="./docs/Screenshot_20260716-172032_Open%20CfMoto.png" width="300"> <img src="./docs/Screenshot_20260716-172039_Open%20CfMoto.png" width="300">
@@ -39,6 +48,11 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
   session)
 - **QR is remembered** — auto-connects when you open the app, no scanning. Re-joins by itself if you
   switch the bike off and back on, and gives up after ~2 min with no bike so it doesn't drain battery
+- **the give-up actually works now.** It never fired: `requestNetwork` was called with no timeout, so
+  a re-request for an absent AP sat pending forever and none of onAvailable/onLost/onUnavailable ever
+  came back. The retry chain re-armed only from onLost, so after exactly one attempt it went silent —
+  wake lock held, encoder running, ~780 resyncs into a bike that wasn't there (7+ min observed). The
+  budget is now wall-clock with an independent watchdog, so nothing can strand it again
 
 **picture**
 - **green flashing fixed** — the encoder outran the dash's ~24 fps pull, and each dropped frame broke
@@ -46,6 +60,16 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 - **fills the whole screen with nothing cropped** — Android Auto can't render 800x400, so it's told to
   keep its UI inside the visible band (margins) and the leftover band is cropped away
 - fill ↔ letterbox toggle, applies live
+- **picture quality setting, because it's really an audio setting.** The dash link is Wi-Fi and your
+  helmet is Bluetooth; on 2.4 GHz they share the band. A parked map costs ~120 kbps, a scrolling one
+  ~600 kbps — so the faster you ride, the more the radio is busy and the worse A2DP stutters. Video
+  never suffers (Wi-Fi wins the arbitration; Bluetooth starves), which is why it's the music that
+  breaks. Turn the picture down to give the audio room
+- keyframes every 5 s instead of every 1 s. A ~20 KB IDR every second against ~500 B P-frames was about a
+  quarter of all airtime, in exactly the bursts that break audio — and redundant, since the media
+  plane is TCP and both moments that truly need a keyframe already request one explicitly
+- the log now names the Wi-Fi band (`[wifi] link: …MHz`), so 2.4 GHz contention is something you can
+  read instead of guess
 
 **control** (this dash is not a touchscreen)
 - **handlebar buttons drive Android Auto.** The buttons never appear on the PXC link — they reach the
@@ -93,10 +117,12 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 - occasional brief video stutter under heavy input (no disconnect)
 
 ## versions
-- **v0.1.2-cfdl16** — bike buttons (volume→knob, enter→select, double-tap→back/home) now fully
-  remappable + navigate-to-a-saved-place, microphone + Assistant, no-crop fill via margins, green
-  flashing fixed, auto-connect + auto-reconnect, four-tab Material 3 UI with tutorial,
-  "Navigate to…" box, status header
+- **v0.1.2.1** *(prerelease)* — **renamed to OpenCFLink** (package `dev.snaipdefix.opencflink`; the
+  `-cfdl16` version suffix is gone now that more than one display is supported). Installs as a new
+  app, so uninstall the old one and re-scan the QR once. Adds the 800NK profile, microphone +
+  Assistant, fully remappable buttons + navigate-to-a-saved-place, no-crop fill via margins, green
+  flashing fixed, auto-connect + a give-up that actually fires, picture-quality setting, four-tab
+  Material 3 UI with tutorial, "Navigate to…" box, status header
 - **v0.1.1-cfdl16** — wifi-direct + 450SR profile, heartbeat fix, HID input logging
 
 ---

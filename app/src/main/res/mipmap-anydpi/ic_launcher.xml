@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Foreground is a density-set PNG rather than a vector: the logo is raster artwork.
+
+  No <monochrome> layer. Themed icons tint a silhouette flat, and this logo IS its detail — a ring,
+  a fairing and a winged A in shades of silver. Flattened to one colour it reads as a blob, so
+  Android is left to fall back to the full-colour icon, which is the better of the two.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>
