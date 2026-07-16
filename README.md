@@ -1,7 +1,7 @@
 # OpenCfMoto - 450SR — forked from [BojanJ](https://github.com/BojanJ/open-cfmoto/)
 
 ## download from [releases](https://github.com/ionutradu252/open-cfmoto/releases)
-
+<img src="./docs/IMG_20260716_135927.jpg" width="300">
 Android Auto on the 2025 CFMOTO 450SR dash — model id `66660742`, CFDL16 display (landscape),
 sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 
