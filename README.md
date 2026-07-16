@@ -5,6 +5,31 @@
 Android Auto on the 2025 CFMOTO 450SR dash — model id `66660742`, CFDL16 display (landscape),
 sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 
+## what works
+- **Android Auto on the bike's screen** — Maps, Waze, Spotify, whatever you already use
+- **fills the whole dash**, smooth, nothing cropped, no flickering
+- **set up once** — scan the QR the dash shows, and that's the last time you'll see the scanner.
+  After that: ignition on, open the app, it connects on its own
+- **survives an ignition cycle** — stop for fuel, switch the bike off and on, it re-joins by itself
+- **the handlebar buttons control it** — ▲▼ scroll through menus, enter selects, ▼▼ = back,
+  ▲▲ = home. Every one of them can be remapped, including to "navigate to a saved address"
+- **voice works** — ask the Assistant for directions through your helmet mic, without stopping
+- **type a destination in the app** and the route appears on the dash
+- **sound works as usual** — music and nav voice reach your helmet the way they always did
+
+## what doesn't
+- **your music pauses while the handlebar buttons are set to drive Android Auto.** Android only lets
+  one app own those buttons at a time. Switch it off in Settings when you want music control back
+- **holding ▲/▼** (next/previous track) does nothing while Android Auto is on the screen
+- **double-pressing enter** does nothing — the dash can't send it quickly enough to tell it apart
+  from two normal presses. Use a volume double tap instead
+- **no touch** — the 450SR dash isn't a touchscreen, so it's the handlebar buttons or your phone
+- **brief stutter** if you really mash the buttons. It doesn't disconnect
+- only tested on a 450SR with a Xiaomi 13 — other bikes/phones are a coin flip
+
+## in app screenshots
+<img src="./docs/Screenshot_20260716-172032_Open%20CfMoto.png" width="300"> <img src="./docs/Screenshot_20260716-172039_Open%20CfMoto.png" width="300">
+
 ## fixes + new features
 
 **connection**
@@ -46,8 +71,7 @@ sdkVersion `0.9.23.4`. Tested on a Xiaomi 13 / Android 16.
 **voice**
 - **microphone works** — the phone is presented to Android Auto as the head unit's mic, so the
   Assistant can hear you. Capture prefers the Bluetooth headset (Cardo → bike → phone) over the
-  phone's own mic. Two quick presses of the handlebar enter opens the Assistant; there's a button in
-  the app too
+  phone's own mic. There's a button in the app, and any handlebar gesture can be mapped to it
 
 **app**
 - four-tab Material 3 UI — Connect (pair → connect → navigate), Control (knob / D-pad / voice),
