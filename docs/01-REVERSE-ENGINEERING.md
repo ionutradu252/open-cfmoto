@@ -25,8 +25,8 @@ The dash shows a QR that is a URL with a query string, e.g.:
 
 ```
 http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37416&sn=peTz&action=9
-   &ssid=CFMOTO-f46457&pwd=59a9cddc94&auth=wpa2-psk
-   &mac=6C:09:4A:0F:6C:F8&name=CFMOTO-f46457
+   &ssid=CFMOTO-xxxxxx&pwd=<redacted>&auth=wpa2-psk
+   &mac=6C:09:4A:0F:6C:F8&name=CFMOTO-xxxxxx
 ```
 
 - `ssid` / `pwd` / `auth` / `mac` / `name` — **stable across scans** (the bike's Wi-Fi AP creds).
@@ -39,7 +39,7 @@ http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37416&sn=peTz&action=9
 
 Verified against real hardware (`cfmoto-tcp-v5.log`). Sequence:
 
-1. Phone joins the bike Wi-Fi AP (`CFMOTO-f46457`, WPA2, **no internet**). Bike = gateway
+1. Phone joins the bike Wi-Fi AP (`CFMOTO-xxxxxx`, WPA2, **no internet**). Bike = gateway
    **192.168.0.1**; phone gets **192.168.0.50/24**.
 2. Phone discovers the bike via mDNS `_EasyConn._tcp.local.` advertising `192.168.0.1:10930`
    (TXT: huid, huname, channel, flavor, port, ip). In practice you can just use the gateway IP + 10930.
@@ -195,7 +195,7 @@ PXC protocol as CFDL16 (§§1–5) but it diverges in verified ways. All values 
 against the real bike (`com.cfmoto.cfdashmotoplay`). §§1–6 describe CFDL16; the deltas are here.
 
 ### 7.0 Identity (from its CLIENT_INFO)
-- HUID `6WX0AT231300200`, HUName `CFMOTO-805120`, `package_name = com.cfmoto.cfdashmotoplay`,
+- HUID `6WX0AT231300200`, HUName `CFMOTO-xxxxxx`, `package_name = com.cfmoto.cfdashmotoplay`,
   `version_name = CFDL26.2.3.5.0.6`, **`sdkVersion 1.1.4`** (CFDL16 was `0.9.29.1`).
 - Same family: `flavor 65540`, `productType 3`, `screenType 1`, `mirrorMode 1`, `pxcVersion 1.0.2`.
 - **Deltas:** `enableSockServerAuth=true`, `dpi=240` (`enableDPI=true`), `supportScreenTouch=true`,
@@ -204,7 +204,7 @@ against the real bike (`com.cfmoto.cfdashmotoplay`). §§1–6 describe CFDL16; 
 - QR `modelid=37426` (CFDL16 was `37416`) — used to pick the bike profile *before* connecting (see `02`).
 
 ### 7.1 Transport — Wi-Fi Direct P2P (not plain AP)
-QR SSID is `DIRECT-CF-CFMOTO-805120` (`pwd 12345678`) — a **Wi-Fi Direct** group, not CFDL16's plain AP.
+QR SSID is `DIRECT-CF-CFMOTO-xxxxxx` (`pwd 12345678`) — a **Wi-Fi Direct** group, not CFDL16's plain AP.
 Phone lands on `192.168.49.132/24`, **gateway/bike = 192.168.49.1**, iface `wlan1` (the classic Android
 P2P subnet). Probe (:10930), connect-back, and framing are otherwise identical. Our `WifiNetworkSpecifier`
 join + `bindProcessToNetwork` handled this **unchanged** — no code change was needed for P2P.
@@ -220,7 +220,7 @@ control frame with `cmd+1`.** Frames observed on the CAR_DATA (:10922) connectio
 |----:|------|---------|-------|
 | `0x10780` | LOG_REPORT | `{"log":"…mdns success…"}` | **the first gate** — CFDL16 never sends it; bike stalls if unacked |
 | `0x103e0` | CHECK_SN | `{client_set,sn}` | handled as on CFDL16 (→ `0x103e1` then `0x201c0`) |
-| `0x103a0` | OTA_FTP_INFO | `{port:11021,userName:"carbit_ec_ftp_ota",pwd:"$Siwei2018@"}` | the bike's own Carbit FTP server (§7.4) |
+| `0x103a0` | OTA_FTP_INFO | `{port:11021,userName:"carbit_ec_ftp_ota",pwd:"<redacted>"}` | the bike's own Carbit FTP server (§7.4) |
 | `0x10020` | MEDIA_FEATURE_CFG | `{music,talkie,tts,vr,autoChangeToBT}` | audio/feature flags |
 | `0x10040` | — | `{maxNaviIcon:161,supportFunction:0}` | |
 | `0x10600` | — | binary + timestamp | **repeats ~every 2s** — a clock/keepalive; keep acking |

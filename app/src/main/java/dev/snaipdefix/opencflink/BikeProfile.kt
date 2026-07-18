@@ -94,6 +94,14 @@ interface BikeProfile {
     fun versionReply(): Pair<Int, Int> = 3 to 1
 
     /**
+     * black borders this dash wants by default: top, bottom, left, right, in dash pixels.
+     *
+     * for dashes that draw their own furniture on top of the projection. the rider can still change
+     * it in settings, and doing so replaces this entirely (see ScreenMargins).
+     */
+    val defaultMargins: IntArray get() = intArrayOf(0, 0, 0, 0)
+
+    /**
      * true when we know exactly which buttons this dash sends, so the ui can hide the rest.
      * false = show every gesture with its generic name, because we're guessing.
      */
@@ -376,6 +384,19 @@ object Cfdl26NkTouchProfile : BikeProfile {
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "37426"
 
     /**
+     * 22px off the top by default.
+     *
+     * this dash (an 800NK Advanced) paints MotoPlay's own pull-down handle across the top of the
+     * projection. that strip belongs to the dash: a swipe starting there yanks the projection away
+     * and nothing we send stops it. blanking it keeps AA out from under the handle, and 22 is the
+     * number that measured right on the bike.
+     *
+     * one bike's measurement, so treat it as a starting point rather than gospel. it costs 3% of the
+     * panel and settings overrides it.
+     */
+    override val defaultMargins = intArrayOf(22, 0, 0, 0)
+
+    /**
      * from a press-every-button capture (2026-07-17): left/right send next/prev, star sends
      * play/pause, and fn / voice / up / down send nothing at all, over neither avrcp nor pxc.
      * up/down are the dash's own volume, voice runs its local speech engine.
@@ -417,7 +438,7 @@ object Cfdl26NkTouchProfile : BikeProfile {
 }
 
 /**
- * bike D, CFDL16-class MotoPlay on modelId 66660742 (HUName CFMOTO-4A71BD, sdk 0.9.23.4, flavor
+ * bike D, CFDL16-class MotoPlay on modelId 66660742 (HUName CFMOTO-xxxxxx, sdk 0.9.23.4, flavor
  * 65540, wifi direct DIRECT-go-CFMOTO-...). the 450SR.
  *
  * despite the newer modelId this is a 0.9.x unit like the 675: landscape panel asking for an 800x400

@@ -6,11 +6,14 @@ package dev.snaipdefix.opencflink
  * runs when the line is written, not when it's shared. nobody reads 2000 lines before tapping
  * "report a problem", so the buffer itself has to be safe to post publicly.
  *
- * logs used to contain:
- *   QR raw: ...&pwd=<bike wifi password>
- *   "password" : "ASDF!@#$asdf1234"
- *   "pwd" : "XulxsD/vib+..."      (ota ftp)
- *   "HUID" : "CRCP241003559"      (bike serial)
+ * logs used to contain, in the clear:
+ *   the bike's wifi password, straight out of the scanned qr (&pwd=...)
+ *   the dash's easy_conn password
+ *   the ota ftp password
+ *   the vehicle serial (HUID)
+ *
+ * don't paste real examples back into this comment or the tests. that is how they end up in a public
+ * repo, which is the whole thing this class is for.
  *
  * ssid, model id and the first 4 chars of serials are kept, needed to debug anything, and the
  * ssid is broadcast to the street anyway. Cfdl26NkTouchProfile scores on the HUID prefix.

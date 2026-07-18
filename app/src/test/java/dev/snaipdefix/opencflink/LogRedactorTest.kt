@@ -6,8 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * every input here is a real line from a ride log (450SR and 800NK, 2026-07-16). if one of these
- * leaks, someone posts their bike's wifi password to a public issue tracker.
+ * every input here is SYNTHETIC — same shape as a real log line, invented values.
+ *
+ * an earlier version of this file used real captures, which put a live wifi password and a real
+ * vehicle serial into a public repo: exactly what the class under test exists to prevent. if you add
+ * a case, copy the shape of a log line, never its contents.
  */
 class LogRedactorTest {
 
@@ -15,49 +18,53 @@ class LogRedactorTest {
 
     @Test
     fun `dash easy_conn password is gone`() {
-        val line = """   "password" : "ASDF!@#${'$'}asdf1234","""
+        val line = """   "password" : "EXAMPLE!@#pass0000","""
         val out = r(line)
-        assertFalse(out, out.contains("ASDF"))
+        assertFalse(out, out.contains("EXAMPLE"))
         assertTrue(out, out.contains("«redacted»"))
     }
 
     @Test
     fun `OTA ftp password is gone`() {
-        val out = r("""   "pwd" : "${'$'}Siwei2018@",""")
-        assertFalse(out, out.contains("Siwei"))
+        val out = r("""   "pwd" : "${'$'}Example2000@",""")
+        assertFalse(out, out.contains("Example"))
     }
 
     @Test
     fun `long base64 pwd blob is gone`() {
-        val blob = "Fyh2cUzEn2iPbVLu3n/MmTsna4v3saXv0utCJO51eu3ltfla2b3ufqZHa2cRubS+W/Gc6Pgif6aGe1ZmUdtiO+tnyDYl+QwFZ0nFo1Fge9V7VzMjtYZrhynDKZfx7beNvZPrgj79CfemK5GU2MX9aLMY1QZnkqjkQo2Vof4NTP0="
+        // same length and alphabet as the real thing, none of the real bytes
+        val blob = "AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHHIIIIJJJJKKKKLLLLMMMMNNNNOOOOPPPP" +
+            "QQQQRRRRSSSSTTTTUUUUVVVVWWWWXXXXYYYYZZZZ0000111122223333444455/6" +
+            "6667777888899990000aaaabbbbccccddddeeeeffffgggghhhhiiiijjjjkk8Q="
         val out = r("""   "pwd" : "$blob",""")
-        assertFalse(out, out.contains("Fyh2"))
-        assertFalse(out, out.contains("TP0="))
+        assertFalse(out, out.contains("AAAA"))
+        assertFalse(out, out.contains("kk8Q="))
     }
 
     @Test
     fun `raw QR wifi password is gone but the rest survives`() {
-        val line = "QR raw: https://cfmoto.com/c?ssid=DIRECT-go-CFMOTO-4A71BD&pwd=59a9cddc94&mac=aa:bb&modelId=66660742"
+        val line = "QR raw: https://example.invalid/c?ssid=DIRECT-go-CFMOTO-000000&pwd=0a1b2c3d4e" +
+            "&mac=aa:bb&modelId=66660742"
         val out = r(line)
-        assertFalse("the Wi-Fi password leaked: $out", out.contains("59a9cddc94"))
+        assertFalse("the Wi-Fi password leaked: $out", out.contains("0a1b2c3d4e"))
         // still useful
-        assertTrue(out, out.contains("DIRECT-go-CFMOTO-4A71BD"))
+        assertTrue(out, out.contains("DIRECT-go-CFMOTO-000000"))
         assertTrue(out, out.contains("66660742"))
     }
 
     @Test
     fun `bike serial keeps its family prefix but loses the identity`() {
-        val out = r("""   "HUID" : "6KWV0000AL35C28120000148",""")
-        // Cfdl26NkTouchProfile scores on this prefix, masking it all breaks profile debugging
-        assertTrue("prefix must survive for profile scoring: $out", out.contains("6KWV"))
-        assertFalse("full serial leaked: $out", out.contains("6KWV0000AL35C28120000148"))
+        val out = r("""   "HUID" : "ABCD0000000000000000EXAM",""")
+        // the profile scores on the prefix, so masking all of it breaks profile debugging
+        assertTrue("prefix must survive for profile scoring: $out", out.contains("ABCD"))
+        assertFalse("full serial leaked: $out", out.contains("ABCD0000000000000000EXAM"))
     }
 
     @Test
     fun `bare carHuid in our own prose is masked`() {
-        val out = r("[:10922] carHuid=CRCP241003559 HUName=CFMOTO-4A71BD channel=66660742")
-        assertFalse("full serial leaked: $out", out.contains("CRCP241003559"))
-        assertTrue(out, out.contains("CRCP"))
+        val out = r("[:10922] carHuid=TEST000000000 HUName=CFMOTO-000000 channel=66660742")
+        assertFalse("full serial leaked: $out", out.contains("TEST000000000"))
+        assertTrue(out, out.contains("TEST"))
         assertTrue("channel is needed for profile debugging: $out", out.contains("66660742"))
     }
 
@@ -76,7 +83,7 @@ class LogRedactorTest {
 
     @Test
     fun `ssid is kept - the bike broadcasts it anyway and we need it`() {
-        val line = "Wi-Fi joined: DIRECT-go-CFMOTO-4A71BD (network=149, bound)"
+        val line = "Wi-Fi joined: DIRECT-go-CFMOTO-000000 (network=149, bound)"
         assertEquals(line, r(line))
     }
 
@@ -84,16 +91,16 @@ class LogRedactorTest {
     fun `a whole CLIENT_INFO block survives redaction intact except the secrets`() {
         val block = """
             {
-               "HUID" : "CRCP241003559",
+               "HUID" : "TEST000000000",
                "channel" : "66660742",
-               "password" : "ASDF!@#asdf1234",
+               "password" : "EXAMPLEpass1234",
                "sdkVersion" : "0.9.23.4",
                "supportScreenTouch" : false
             }
         """.trimIndent()
         val out = r(block)
-        assertFalse(out, out.contains("ASDF"))
-        assertFalse(out, out.contains("CRCP241003559"))
+        assertFalse(out, out.contains("EXAMPLEpass"))
+        assertFalse(out, out.contains("TEST000000000"))
         assertTrue(out, out.contains("\"channel\" : \"66660742\""))
         assertTrue(out, out.contains("\"sdkVersion\" : \"0.9.23.4\""))
         assertTrue(out, out.contains("\"supportScreenTouch\" : false"))

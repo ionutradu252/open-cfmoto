@@ -25,29 +25,66 @@ object ScreenMargins {
     /** a sane ceiling so a typo can't inset the picture out of existence */
     const val MAX = 200
 
-    @Volatile var top = 0; private set
-    @Volatile var bottom = 0; private set
-    @Volatile var left = 0; private set
-    @Volatile var right = 0; private set
+    @Volatile private var userTop = 0
+    @Volatile private var userBottom = 0
+    @Volatile private var userLeft = 0
+    @Volatile private var userRight = 0
+
+    /** false until the rider saves their own, so a known dash's default can apply instead */
+    @Volatile var customised = false; private set
+
+    // the profile's default until someone overrides it, so a dash we already understand arrives set
+    // up rather than needing every owner to rediscover the same number.
+    val top: Int get() = if (customised) userTop else BikeProfileHolder.active.defaultMargins[0]
+    val bottom: Int get() = if (customised) userBottom else BikeProfileHolder.active.defaultMargins[1]
+    val left: Int get() = if (customised) userLeft else BikeProfileHolder.active.defaultMargins[2]
+    val right: Int get() = if (customised) userRight else BikeProfileHolder.active.defaultMargins[3]
 
     val any: Boolean get() = top != 0 || bottom != 0 || left != 0 || right != 0
 
     fun load(context: Context) {
         val p = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
-        top = p.getInt("top", 0); bottom = p.getInt("bottom", 0)
-        left = p.getInt("left", 0); right = p.getInt("right", 0)
+        customised = wasCustomised(
+            hasFlag = p.contains("customised"),
+            flag = p.getBoolean("customised", false),
+            hasEdgeKeys = p.contains("top") || p.contains("bottom") ||
+                p.contains("left") || p.contains("right"),
+        )
+        userTop = p.getInt("top", 0); userBottom = p.getInt("bottom", 0)
+        userLeft = p.getInt("left", 0); userRight = p.getInt("right", 0)
     }
 
+    /**
+     * did the rider set these themselves?
+     *
+     * 0.1.3 stored the four edges with no flag, so reading a missing flag as "no" would quietly drop
+     * an upgrader's margins back to the profile default. if the edge keys are there at all, someone
+     * saved them, including if they saved zeros.
+     */
+    internal fun wasCustomised(hasFlag: Boolean, flag: Boolean, hasEdgeKeys: Boolean): Boolean =
+        if (hasFlag) flag else hasEdgeKeys
+
     fun set(context: Context, t: Int, b: Int, l: Int, r: Int) {
-        top = t.coerceIn(0, MAX); bottom = b.coerceIn(0, MAX)
-        left = l.coerceIn(0, MAX); right = r.coerceIn(0, MAX)
+        userTop = t.coerceIn(0, MAX); userBottom = b.coerceIn(0, MAX)
+        userLeft = l.coerceIn(0, MAX); userRight = r.coerceIn(0, MAX)
+        customised = true
         context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
-            .putInt("top", top).putInt("bottom", bottom)
-            .putInt("left", left).putInt("right", right)
+            .putBoolean("customised", true)
+            .putInt("top", userTop).putInt("bottom", userBottom)
+            .putInt("left", userLeft).putInt("right", userRight)
             .apply()
     }
 
-    fun summary(): String =
-        if (!any) "None — Android Auto uses the whole dash."
-        else "Top $top · bottom $bottom · left $left · right $right px"
+    /** back to whatever this dash's profile suggests, not necessarily zero */
+    fun reset(context: Context) {
+        customised = false
+        context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
+            .putBoolean("customised", false).apply()
+    }
+
+    fun summary(): String = when {
+        !any -> "None — Android Auto uses the whole dash."
+        !customised -> "Top $top · bottom $bottom · left $left · right $right px (default for this dash)"
+        else -> "Top $top · bottom $bottom · left $left · right $right px"
+    }
 }

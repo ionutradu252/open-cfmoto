@@ -519,7 +519,7 @@ class MainActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton("Done", null)
             .setNeutralButton("Reset") { _, _ ->
-                ScreenMargins.set(this, 0, 0, 0, 0)
+                ScreenMargins.reset(this)
                 AaVideoBridge.pipeline?.refreshDisplayMode()
                 refreshMargins()
                 LogBus.log("→ screen margins reset")
