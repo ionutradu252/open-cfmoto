@@ -10,7 +10,7 @@
 |---|
 | **CFMOTO 450SR** |
 | **CFMOTO 450MT** |
-| **CFMOTO 800NK** |
+| **CFMOTO 800NK Advanced** |
 | **CFMOTO 800MT** |
 | **CFMOTO 1000MT-X** |
 
@@ -45,7 +45,7 @@ wrong, reconnect once. if it still looks wrong, use **report a problem** in the 
   one app own those buttons at a time. switch it off in settings when you want music control back
 - **450SR: no double press of enter** — the dash can't send it fast enough to tell apart from two
   normal presses. use a volume double tap instead
-- **800NK: fn, voice, ▲ and ▼ do nothing** — those buttons never leave the bike. ▲/▼ are the dash's
+- **800NK Advanced: fn, voice, ▲ and ▼ do nothing** — those buttons never leave the bike. ▲/▼ are the dash's
   own volume and voice runs its own speech engine
 
 ## easy on the battery
@@ -86,7 +86,7 @@ running the screen and the wifi link.
 
 ## versions
 
-- **v0.1.3** — first stable. 800NK touch working properly (taps, drags and pinch), dash view on the
+- **v0.1.3** — first stable. 800NK Advanced touch working properly (taps, drags and pinch), dash view on the
   phone, screen margins, update check, 450SR ▲/▼ hold mappable again, lots of touch and connection
   fixes
 - **v0.1.2.1** *(prerelease)* — renamed to OpenCFLink. installs as a new app, so uninstall the old
