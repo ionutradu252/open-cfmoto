@@ -22,4 +22,7 @@ local.properties
 
 # Bike-test captures stay LOCAL. They are written before redaction runs, so they
 # hold the wifi password, the OTA credentials and the vehicle serial in the clear.
+
+# Bike-test captures stay LOCAL. They are written before redaction runs, so they
+# hold the wifi password, the OTA credentials and the vehicle serial in the clear.
 logs/
