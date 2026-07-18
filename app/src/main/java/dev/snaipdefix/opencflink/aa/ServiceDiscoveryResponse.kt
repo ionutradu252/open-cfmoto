@@ -1,15 +1,14 @@
-// Adapted from headunit-revived (AGPLv3): aap/protocol/messages/ServiceDiscoveryResponse.kt
-// Video-only head-unit profile for OpenCfMoto: advertises 720x1280 PORTRAIT H.264 video
-// (composited aspect-correct into the bike's requested canvas — the CFDL26 dash is a tall 800x951
-// panel), a driving-status sensor, a touchscreen input service, and a PCM microphone (required for
-// AA bring-up). Audio sink, navigation-status, media-playback and bluetooth services from HUR are
-// intentionally dropped (video-only v1 — see docs 03 M5).
+// adapted from headunit-revived (AGPLv3): aap/protocol/messages/ServiceDiscoveryResponse.kt
+// what we tell AA we are: h264 video at the active profile's resolution, sensors (driving status +
+// night), an input service (keys, and a touchscreen if the dash has one), a system-sound audio sink
+// and a pcm mic. the nav-status, media-playback and bluetooth services from HUR are dropped.
 package dev.snaipdefix.opencflink.aa
 
 import com.google.protobuf.Message
 import dev.snaipdefix.opencflink.AaResolution
 import dev.snaipdefix.opencflink.AaVideoSpec
 import dev.snaipdefix.opencflink.BikeProfileHolder
+import dev.snaipdefix.opencflink.ScreenMargins
 import dev.snaipdefix.opencflink.aa.proto.Common
 import dev.snaipdefix.opencflink.aa.proto.Control
 import dev.snaipdefix.opencflink.aa.proto.Media
@@ -19,10 +18,8 @@ class ServiceDiscoveryResponse
     : AapMessage(Channel.ID_CTR, Control.ControlMsgType.MESSAGE_SERVICE_DISCOVERY_RESPONSE_VALUE, makeProto()) {
 
     companion object {
-        // Video geometry is PROFILE-DRIVEN: the active bike profile (chosen from the QR modelId
-        // before AA starts, refined by CLIENT_INFO) supplies the AA resolution/orientation + dpi.
-        // CFDL16 → landscape 800x480 @160; CFDL26 (1000 MT-X) → portrait 720x1280 @240. These read
-        // the live holder so AaReceiver's decoder fallback dims track the selected profile too.
+        // geometry comes from the active profile (picked from the qr modelId before AA starts,
+        // refined by CLIENT_INFO). read the live holder so AaReceiver's decoder fallback tracks it.
         val AA_WIDTH: Int get() = BikeProfileHolder.active.aaVideo.width
         val AA_HEIGHT: Int get() = BikeProfileHolder.active.aaVideo.height
 
@@ -42,7 +39,7 @@ class ServiceDiscoveryResponse
             val spec = BikeProfileHolder.active.aaVideo
             val services = mutableListOf<Control.Service>()
 
-            // --- Sensor service (driving status + night) ---
+            // sensors: driving status + night
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_SEN
                 service.sensorSourceService = Control.Service.SensorSourceService.newBuilder().also { s ->
@@ -51,7 +48,7 @@ class ServiceDiscoveryResponse
                 }.build()
             }.build())
 
-            // --- Video service (720x1280 PORTRAIT H.264 baseline, 30 fps) ---
+            // video
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_VID
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also { sink ->
@@ -64,10 +61,9 @@ class ServiceDiscoveryResponse
                             frameRate = Control.Service.MediaSinkService.VideoConfiguration.VideoFrameRateType._30
                             setDensity(spec.dpi)
                             // AA only renders at fixed resolutions, so an 800x400 panel can't match
-                            // 800x480 exactly. Declare the difference as margins: AA then keeps its
-                            // UI inside the visible band and leaves the rest empty, and the
-                            // compositor's fill/crop removes exactly that empty band — perfect fit,
-                            // nothing real cropped. See BikeProfile.panelSize.
+                            // 800x480 exactly. declare the difference as margins and AA keeps its ui
+                            // in the visible band, leaving the rest empty, the compositor's fill
+                            // then crops exactly that band. see BikeProfile.panelSize.
                             setMarginWidth(marginW(spec))
                             setMarginHeight(marginH(spec))
                             setVideoCodecType(Media.MediaCodecType.MEDIA_CODEC_VIDEO_H264_BP)
@@ -76,30 +72,31 @@ class ServiceDiscoveryResponse
                 }.build()
             }.build())
 
-            // --- Input service (touchscreen; declared for compatibility, driven by voice in v1) ---
+            // input: keys always, touchscreen only if the dash has one
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_INP
                 service.inputSourceService = Control.Service.InputSourceService.newBuilder().also { inp ->
-                    // D-pad / rotary keycodes so the phone's on-screen buttons can drive AA. Advertising
-                    // these makes Android Auto render a focus-navigable UI (highlighted items), which is
-                    // the only way to control it on a non-touch dash.
+                    // d-pad / rotary keycodes so the app's buttons can drive AA. advertising these
+                    // makes AA draw a focus highlight, the only way to control a non-touch dash.
                     AaInput.SUPPORTED_KEYCODES.forEach { inp.addKeycodesSupported(it) }
-                    // Advertise a touchscreen only on dashes that actually have one. On a non-touch dash
-                    // (supportScreenTouch=false) advertising touch would put AA in touch mode with no
-                    // on-screen focus for the D-pad to move.
+                    // only claim a touchscreen on dashes that have one. on a non-touch dash it would
+                    // put AA in touch mode with no focus for the d-pad to move.
                     if (BikeProfileHolder.active.supportsScreenTouch) {
+                        // the inset ui size, not the video size. AA scales this declaration onto
+                        // video-minus-margins, so it has to match the space AaCompositor.mapCanvasToUi
+                        // sends coords in. declaring the full canvas here is why 800NK touch was
+                        // off even after the frame parse fix.
                         inp.touchscreen = Control.Service.InputSourceService.TouchConfig.newBuilder().apply {
-                            setWidth(spec.width)
-                            setHeight(spec.height)
+                            setWidth(spec.width - marginW(spec))
+                            setHeight(spec.height - marginH(spec))
                         }.build()
                     }
                 }.build()
             }.build())
 
-            // --- Audio2 sink (system sounds). Android Auto rejects a head unit that advertises
-            //     no audio sink and drops the connection right after service discovery, so we
-            //     always advertise this even though the PCM is discarded — nav audio plays via the
-            //     phone's own output → BT helmet, not through us. See AapMessageHandlerType. ---
+            // audio2 sink (system sounds). AA drops the connection right after service discovery if
+            // there's no audio sink at all, so advertise it even though we throw the pcm away, AA's
+            // audio comes out of the phone and reaches the helmet over bluetooth anyway.
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_AU2
                 service.mediaSinkService = Control.Service.MediaSinkService.newBuilder().also { sink ->
@@ -115,7 +112,7 @@ class ServiceDiscoveryResponse
                 }.build()
             }.build())
 
-            // --- Microphone service (required for AA connection / Assistant) ---
+            // mic. required for the connection, and for the assistant.
             services.add(Control.Service.newBuilder().also { service ->
                 service.id = Channel.ID_MIC
                 service.mediaSourceService = Control.Service.MediaSourceService.newBuilder().also { src ->
@@ -156,11 +153,29 @@ class ServiceDiscoveryResponse
         }
 
         /** Empty band AA should leave on each axis so its UI stays inside the dash's real panel. */
+        /**
+         * the area we ask AA to lay its ui out in: the profile's panel, less any screen margins.
+         *
+         * the compositor already blacks the margins out and drops taps there, but AA doesn't know
+         * that, so on its own it would keep putting its top bar under a strip the rider can neither
+         * see nor touch. subtracting here shrinks AA's ui to the part that's actually visible.
+         *
+         * service discovery happens once per connect, so a margin change only reaches AA on the
+         * next connect. the compositor half applies immediately.
+         *
+         * also records what we actually declared, see BikeProfileHolder.declaredPanel.
+         */
+        private fun effectivePanel(): Pair<Int, Int>? =
+            BikeProfileHolder.active.panelSize?.let { (w, h) ->
+                (w - ScreenMargins.left - ScreenMargins.right).coerceAtLeast(1) to
+                    (h - ScreenMargins.top - ScreenMargins.bottom).coerceAtLeast(1)
+            }?.also { BikeProfileHolder.declaredPanel = it }
+
         private fun marginW(spec: AaVideoSpec): Int =
-            BikeProfileHolder.active.panelSize?.let { (spec.width - it.first).coerceAtLeast(0) } ?: 0
+            effectivePanel()?.let { (spec.width - it.first).coerceAtLeast(0) } ?: 0
 
         private fun marginH(spec: AaVideoSpec): Int =
-            BikeProfileHolder.active.panelSize?.let { (spec.height - it.second).coerceAtLeast(0) } ?: 0
+            effectivePanel()?.let { (spec.height - it.second).coerceAtLeast(0) } ?: 0
 
         private fun makeSensorType(type: Sensors.SensorType): Control.Service.SensorSourceService.Sensor =
             Control.Service.SensorSourceService.Sensor.newBuilder().setType(type).build()

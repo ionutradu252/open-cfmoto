@@ -35,12 +35,11 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The whole app, in four tabs: Connect (pair → connect → navigate), Control (knob/D-pad/voice),
- * Settings and Logs.
+ * the whole app in four tabs: connect, control, settings, logs.
  *
- * Tabs are `<include>`d layouts toggled by visibility, not Fragments: launching Google Android Auto
- * destroys and recreates this activity mid-hand-off, and the connection deliberately outlives it
- * (see [onDestroy]) — one flat view tree with no fragment lifecycle is far less to go wrong.
+ * tabs are <include>d layouts toggled by visibility, not fragments. launching google AA destroys and
+ * recreates this activity mid hand-off and the connection has to outlive it (see onDestroy), so one
+ * flat view tree with no fragment lifecycle is a lot less to go wrong.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
     private val uiHandler = Handler(Looper.getMainLooper())
     private lateinit var prober: EasyConnProber
     private var bleWakeUp: BleWakeUp? = null
-    /** True when the pending QR scan should kick off the Android Auto flow (vs the mirror path). */
+    /** true when the pending qr scan should start the AA flow rather than the mirror path */
     private var pendingAaStart = false
 
     private val scanLauncher = registerForActivityResult(
@@ -74,7 +73,7 @@ class MainActivity : AppCompatActivity() {
             "QR parsed: ssid=${qr.ssid} mac=${qr.mac} action=${qr.action} " +
                 "(ap=${qr.supportsAp}, p2p=${qr.supportsP2p}) modelId=${qr.modelId} sn=${qr.sn}"
         )
-        // Remember the bike's Wi-Fi so we can auto-connect next time without re-scanning.
+        // remember the bike's wifi so we can auto connect next time
         BikeCreds.save(applicationContext, qr)
         showBikeInfo()
 
@@ -82,8 +81,8 @@ class MainActivity : AppCompatActivity() {
             pendingAaStart = false
             connectAa(qr)
         } else {
-            // Mirror path (screen projection already armed): pick profile, connect straight away.
-            BikeProfileHolder.active = BikeProfiles.selectByQr(qr)
+            // mirror path, projection already armed: pick a profile and connect
+            BikeProfileHolder.active = BikeProfiles.selectByQr(qr, applicationContext, ::log)
             val spec = BikeProfileHolder.active.aaVideo
             log("→ bike profile (modelId=${qr.modelId}): ${BikeProfileHolder.active.name} " +
                 "→ AA ${spec.width}x${spec.height} @${spec.dpi}dpi")
@@ -92,13 +91,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Start the full Android Auto → bike flow for a bike ([qr] from a fresh scan or saved creds):
-     * pick the screen profile, bring up the receiver, and (once AA video is steady) join the bike
-     * Wi-Fi and run the PXC handshake. Uses process-global state so it survives the activity being
-     * recreated when Google Android Auto launches.
+     * start the whole AA -> bike flow: pick the screen profile, bring up the receiver, and once AA
+     * video is steady join the bike wifi and run the pxc handshake. uses process globals so it
+     * survives this activity being recreated when google AA launches.
      */
     private fun connectAa(qr: QrData) {
-        BikeProfileHolder.active = BikeProfiles.selectByQr(qr)
+        BikeProfileHolder.active = BikeProfiles.selectByQr(qr, applicationContext, ::log)
         val spec = BikeProfileHolder.active.aaVideo
         log("→ bike profile (modelId=${qr.modelId}): ${BikeProfileHolder.active.name} " +
             "→ AA ${spec.width}x${spec.height} @${spec.dpi}dpi")
@@ -109,8 +107,8 @@ class MainActivity : AppCompatActivity() {
             joinAndStart(qr)
         }
         AndroidAutoService.start(this)
-        // Trigger Google AA to project from the FOREGROUND activity (background-activity-launch
-        // safe on Android 12+/15), after giving the service's :5288 server time to bind.
+        // trigger google AA from the foreground activity (background launch rules), after giving
+        // the service's :5288 server time to bind
         uiHandler.postDelayed({
             dev.snaipdefix.opencflink.aa.AaSelfMode.trigger(this, log = ::log)
         }, 900)
@@ -123,9 +121,8 @@ class MainActivity : AppCompatActivity() {
             log("screen-capture consent declined")
             return@registerForActivityResult
         }
-        // FGS of type mediaProjection must be RUNNING before getMediaProjection() on API 34+.
-        // startForegroundService is async, so poll the service's foreground flag (~every 100ms)
-        // instead of guessing a fixed delay.
+        // a mediaProjection foreground service has to be running before getMediaProjection() on
+        // api 34+. startForegroundService is async, so poll its flag instead of guessing a delay.
         ProjectionService.start(this)
         val code = result.resultCode
         val data = result.data!!
@@ -137,11 +134,11 @@ class MainActivity : AppCompatActivity() {
                     try {
                         val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                         ProjectionHolder.projection = mpm.getMediaProjection(code, data)
-                        // Mirror used to always re-scan the QR. Reuse the saved bike like Start does.
+                        // mirror used to always re-scan the qr. reuse the saved bike like start does.
                         val saved = BikeCreds.load(applicationContext)
                         if (saved != null) {
                             log("screen-capture armed — using saved bike Wi-Fi (${saved.ssid}), no QR needed")
-                            BikeProfileHolder.active = BikeProfiles.selectByQr(saved)
+                            BikeProfileHolder.active = BikeProfiles.selectByQr(saved, applicationContext, ::log)
                             joinAndStart(saved)
                         } else {
                             log("screen-capture armed (FGS up after ${tries * 100}ms) — now scan the QR")
@@ -180,24 +177,23 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<TextView>(R.id.tv_version).text = "v${BuildConfig.VERSION_NAME}"
 
-        // Reuse the process-global prober if one already exists (e.g. this activity was recreated
-        // while the Android Auto receiver kept running in the foreground service). Constructing a
-        // fresh one here would orphan the running instance — leaking its sockets/threads and making
-        // the Stop button operate on the wrong object. See [BikeLink].
+        // reuse the existing prober if there is one (this activity gets recreated while the
+        // receiver keeps running in the service). making a new one would orphan the running
+        // instance, leaking its sockets and threads and pointing stop at the wrong object.
         prober = BikeLink.prober ?: EasyConnProber(applicationContext, LogBus::log).also { BikeLink.prober = it }
 
         requestPermissions()
 
-        // Display/button/auto-connect preferences are persisted; load the display override once here
-        // so the compositor uses it from the first frame.
+        // load the display prefs once here so the compositor has them from the first frame
         DisplayMode.load(applicationContext)
+        DisplayAlign.load(applicationContext)
+        ScreenMargins.load(applicationContext)
 
-        // The log mirror and the status tick are attached in onResume, not here — see [onPause].
-        log("Ready. Tap Connect — first time, scan the QR the dash shows in MotoPlay.")
+        // the log mirror and the status tick attach in onResume, see onPause
+        log("Ready. Tap Connect. First time, scan the QR the dash shows in MotoPlay.")
 
-        // Auto-connect on open: if we've saved a bike and nothing is running, start Android Auto
-        // straight away (no QR scan). Guarded so an activity recreation (which Google AA triggers)
-        // doesn't re-fire it.
+        // auto connect on open, if a bike is saved and nothing is running. guarded so the activity
+        // recreation google AA causes doesn't fire it twice.
         if (!AndroidAutoService.isRunning && !autoConnectDone && AppPrefs.isAutoConnect(applicationContext)) {
             BikeCreds.load(applicationContext)?.let { saved ->
                 autoConnectDone = true
@@ -251,7 +247,7 @@ class MainActivity : AppCompatActivity() {
         connectBtn = findViewById(R.id.btn_connect)
         connectHint = findViewById(R.id.tv_connect_hint)
 
-        // One button for the whole thing: start when idle, stop when running.
+        // one button for the whole thing: start when idle, stop when running
         connectBtn.setOnClickListener {
             if (AndroidAutoService.isRunning) stopEverything() else startAa()
         }
@@ -272,7 +268,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_forget_bike).setOnClickListener {
             BikeCreds.clear(applicationContext)
             log("→ forgot saved bike — Connect will scan the QR again")
-            Toast.makeText(this, "Saved bike forgotten", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Bike forgotten", Toast.LENGTH_SHORT).show()
             showBikeInfo()
         }
 
@@ -310,18 +306,18 @@ class MainActivity : AppCompatActivity() {
         val saved = BikeCreds.load(applicationContext)
         if (saved == null) {
             log("→ no bike saved yet — scan the QR the dash shows in MotoPlay (step 1)")
-            Toast.makeText(this, "Scan the bike QR first", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Scan the QR first", Toast.LENGTH_SHORT).show()
             findViewById<MaterialButton>(R.id.btn_scan_qr).performClick()
             return
         }
-        // Known bike: skip the QR scan (SSID/pwd are stable) — Forget makes it scan again.
+        // Known bike: skip the QR scan (SSID/pwd are stable), Forget makes it scan again.
         log("→ using saved bike Wi-Fi (ssid=${saved.ssid}) — skipping QR")
         ProjectionHolder.projection = null
         ensureLocationPermission()
         connectAa(saved)
     }
 
-    /** Stop everything: Android Auto receiver, bike PXC, projection, and leave the bike Wi-Fi. */
+    /** stop everything: receiver, pxc, projection, and leave the bike wifi */
     private fun stopEverything() {
         log("→ stopping everything (Android Auto + bike)")
         AaVideoBridge.onSteadyVideo = null
@@ -336,17 +332,17 @@ class MainActivity : AppCompatActivity() {
         BikeWifi.leave(this, ::log)
     }
 
-    /** Show which bike is remembered (or that none is), so "Forget" has visible meaning. */
+    /** show which bike is remembered, so forget has visible meaning */
     private fun showBikeInfo() {
         val saved = BikeCreds.load(applicationContext)
         findViewById<TextView>(R.id.tv_bike_info).text = if (saved == null) {
-            "No bike saved. On the dash open MotoPlay so the QR appears, then scan it — once."
+            "No bike saved. Open MotoPlay on the dash so the QR appears, then scan it."
         } else {
-            "Saved: ${saved.ssid}  ·  model ${saved.modelId ?: "?"}\n" +
-                "Screen profile: ${BikeProfiles.selectByQr(saved).name}"
+            "${saved.ssid}  ·  model ${saved.modelId ?: "?"}\n" +
+                BikeProfiles.selectByQr(saved, applicationContext).name
         }
         findViewById<TextView>(R.id.tv_profile_info).text = saved?.let {
-            val p = BikeProfiles.selectByQr(it)
+            val p = BikeProfiles.selectByQr(it, applicationContext)
             val s = p.aaVideo
             "profile: ${p.name}\nAA video: ${s.width}x${s.height} @${s.dpi}dpi\n" +
                 "panel: ${p.panelSize?.let { ps -> "${ps.first}x${ps.second}" } ?: "—"}"
@@ -356,7 +352,7 @@ class MainActivity : AppCompatActivity() {
     // ─────────────────────────── control tab ───────────────────────────
 
     private fun setupControlTab() {
-        // Android Auto D-pad — drive a non-touch dash from the phone (set a destination, then ride).
+        // d-pad, for driving a non-touch dash from the phone
         findViewById<MaterialButton>(R.id.btn_key_up).setOnClickListener { sendAaKey(AaInput.KEY_UP) }
         findViewById<MaterialButton>(R.id.btn_key_down).setOnClickListener { sendAaKey(AaInput.KEY_DOWN) }
         findViewById<MaterialButton>(R.id.btn_key_left).setOnClickListener { sendAaKey(AaInput.KEY_LEFT) }
@@ -364,14 +360,21 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_key_enter).setOnClickListener { sendAaKey(AaInput.KEY_ENTER) }
         findViewById<MaterialButton>(R.id.btn_key_back).setOnClickListener { sendAaKey(AaInput.KEY_BACK) }
         findViewById<MaterialButton>(R.id.btn_key_home).setOnClickListener { sendAaKey(AaInput.KEY_HOME) }
-        // Rotary knob: AA treats this dash as a rotary HU, so the knob (not the arrows) is what
-        // steps focus through list items.
+        // knob. AA treats us as a rotary head unit, so this (not the arrows) steps focus.
         findViewById<MaterialButton>(R.id.btn_scroll_back).setOnClickListener { sendAaScroll(-1) }
         findViewById<MaterialButton>(R.id.btn_scroll_fwd).setOnClickListener { sendAaScroll(+1) }
-        // Voice: the same key a head unit's talk button sends. AA then opens the mic channel and
-        // AaMicrophone streams the phone's mic (i.e. the helmet headset) back to it.
+        // voice: the same key a head unit's talk button sends. AA then opens the mic channel and
+        // AaMicrophone streams the phone's mic (the helmet headset) back to it.
         findViewById<MaterialButton>(R.id.btn_key_assistant).setOnClickListener {
             sendAaKey(AaInput.KEY_ASSISTANT)
+        }
+
+        findViewById<MaterialButton>(R.id.btn_dash_view).setOnClickListener {
+            if (AaVideoBridge.pipeline == null) {
+                Toast.makeText(this, "Connect first", Toast.LENGTH_SHORT).show()
+            } else {
+                startActivity(Intent(this, DashViewActivity::class.java))
+            }
         }
 
         val micStatus = findViewById<TextView>(R.id.tv_mic_status)
@@ -389,9 +392,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshMicStatus() {
         findViewById<TextView>(R.id.tv_mic_status).text = if (hasMic()) {
-            "Microphone ready — the Assistant hears whatever your phone hears, so a helmet headset works."
+            "Microphone ready. It uses your helmet headset if one is connected."
         } else {
-            "Microphone permission not granted — tap here to fix, or the Assistant can't hear you."
+            "No microphone permission. Tap here to fix, or the Assistant can't hear you."
         }
     }
 
@@ -407,8 +410,10 @@ class MainActivity : AppCompatActivity() {
     // ─────────────────────────── settings tab ───────────────────────────
 
     private fun setupSettingsTab() {
-        // Display: fill vs letterbox (applies live to the running compositor).
+        // fill vs letterbox, applies live
         DisplayMode.load(applicationContext)
+        DisplayAlign.load(applicationContext)
+        ScreenMargins.load(applicationContext)
         findViewById<MaterialSwitch>(R.id.sw_fill_mode).apply {
             isChecked = DisplayMode.effective()
             setOnCheckedChangeListener { _, checked ->
@@ -418,7 +423,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Controls: bike buttons → Android Auto vs media (applies live).
+        // bike buttons: drive AA or control media. applies live.
         findViewById<MaterialSwitch>(R.id.sw_button_mode).apply {
             isChecked = ButtonMode.isControlAa(applicationContext)
             setOnCheckedChangeListener { _, checked ->
@@ -428,7 +433,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Audio: nothing behind it yet — the switch is disabled in the layout, so just reflect state.
+        // nothing behind this yet, the switch is disabled in the layout
         findViewById<MaterialSwitch>(R.id.sw_aa_audio).isChecked = AppPrefs.isAaAudio(applicationContext)
 
         findViewById<MaterialSwitch>(R.id.sw_auto_connect).apply {
@@ -447,6 +452,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<MaterialButton>(R.id.btn_align).setOnClickListener { pickAlign() }
+        refreshAlign()
+
+        findViewById<MaterialButton>(R.id.btn_night_mode).setOnClickListener { pickNightMode() }
+        refreshNightMode()
+
         findViewById<MaterialButton>(R.id.btn_video_quality).setOnClickListener { pickVideoQuality() }
         refreshVideoQuality()
 
@@ -455,9 +466,174 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.btn_aa_settings).setOnClickListener { openAndroidAutoSettings() }
+
+        findViewById<MaterialButton>(R.id.btn_margins).setOnClickListener { editMargins() }
+        refreshMargins()
+
+        findViewById<MaterialButton>(R.id.btn_check_updates).setOnClickListener { checkUpdates(manual = true) }
+        // and once a day on our own, but only before we join the bike: its wifi has no internet.
+        if (!AndroidAutoService.isRunning) checkUpdates(manual = false)
     }
 
-    /** Trade picture bits against Bluetooth airtime for the helmet audio — see [VideoQuality]. */
+    // ─────────────────────────── screen margins ───────────────────────────
+
+    /**
+     * black borders per edge, applied live so the dash can be watched while they change.
+     *
+     * this exists because MotoPlay's pull-down arrow sits on top of the projection on an 800NK and a
+     * swipe from there kills it. we can't take that strip back from the dash, so we get AA out of it.
+     */
+    private fun editMargins() {
+        val view = layoutInflater.inflate(R.layout.dialog_screen_margins, null)
+        val top = view.findViewById<EditText>(R.id.et_margin_top)
+        val bottom = view.findViewById<EditText>(R.id.et_margin_bottom)
+        val left = view.findViewById<EditText>(R.id.et_margin_left)
+        val right = view.findViewById<EditText>(R.id.et_margin_right)
+        top.setText(ScreenMargins.top.toString())
+        bottom.setText(ScreenMargins.bottom.toString())
+        left.setText(ScreenMargins.left.toString())
+        right.setText(ScreenMargins.right.toString())
+
+        val panel = AaVideoBridge.pipeline?.bikeCanvasSize()
+        view.findViewById<TextView>(R.id.tv_margin_panel).text =
+            if (panel != null) "Your dash is ${panel.first}x${panel.second} px."
+            else "Connect once and this will show your dash's size in pixels."
+
+        fun read(e: EditText) = e.text.toString().trim().toIntOrNull() ?: 0
+        fun apply() {
+            ScreenMargins.set(this, read(top), read(bottom), read(left), read(right))
+            AaVideoBridge.pipeline?.refreshDisplayMode()   // recomputes the viewport + redraws
+            refreshMargins()
+        }
+        // live: type a number, look at the dash, adjust. no OK-then-check-then-reopen loop.
+        for (e in listOf(top, bottom, left, right)) {
+            e.addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(s: android.text.Editable?) = apply()
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            })
+        }
+
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Screen margins")
+            .setView(view)
+            .setPositiveButton("Done", null)
+            .setNeutralButton("Reset") { _, _ ->
+                ScreenMargins.set(this, 0, 0, 0, 0)
+                AaVideoBridge.pipeline?.refreshDisplayMode()
+                refreshMargins()
+                LogBus.log("→ screen margins reset")
+            }
+            .show()
+    }
+
+    private fun refreshMargins() {
+        findViewById<MaterialButton>(R.id.btn_margins).text =
+            if (ScreenMargins.any) "Screen margins: ${ScreenMargins.top}/${ScreenMargins.bottom}/" +
+                "${ScreenMargins.left}/${ScreenMargins.right}"
+            else "Screen margins"
+    }
+
+    // ─────────────────────────── updates ───────────────────────────
+
+    /**
+     * ask github whether there's a newer apk, and show its release notes if so.
+     *
+     * a sideloaded app has nothing keeping it current, so people ride on old builds and report bugs
+     * that are already fixed. the download goes out to the browser rather than us installing it, so
+     * this needs no install permission.
+     */
+    private fun checkUpdates(manual: Boolean) {
+        if (manual) Toast.makeText(this, "Checking…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val release = UpdateChecker.check(applicationContext, manual)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                when {
+                    release != null -> showUpdate(release)
+                    manual -> Toast.makeText(
+                        this,
+                        if (AndroidAutoService.isRunning)
+                            "Can't check while connected — the bike's Wi-Fi has no internet."
+                        else "You're on the latest version.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }.also { it.isDaemon = true }.start()
+    }
+
+    private fun showUpdate(release: UpdateChecker.Release) {
+        val notes = release.notes.ifBlank { "No release notes." }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Update available: ${release.version}")
+            .setMessage("You have ${BuildConfig.VERSION_NAME}.\n\n$notes")
+            .setPositiveButton("Download") { _, _ ->
+                LogBus.log("→ opening ${release.downloadUrl}")
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(release.downloadUrl)))
+                } catch (e: Exception) {
+                    Toast.makeText(this, "Couldn't open the browser", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Later", null)
+            .setNeutralButton("Skip this one") { _, _ ->
+                UpdateChecker.skip(applicationContext, release.version)
+            }
+            .show()
+    }
+
+    /** which slice of AA's canvas the dash shows, see DisplayAlign */
+    private fun pickAlign() {
+        val options = DisplayAlign.Mode.entries
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Picture alignment")
+            .setSingleChoiceItems(
+                options.map { it.label }.toTypedArray(), options.indexOf(DisplayAlign.mode(this))
+            ) { dialog, which ->
+                DisplayAlign.set(this, options[which])
+                DisplayAlign.load(applicationContext)
+                // apply live: the compositor recomputes its viewport, and the same viewport maps
+                // touches, so both move together
+                AaVideoBridge.pipeline?.refreshDisplayMode()
+                LogBus.log("→ picture alignment: ${options[which].label}")
+                dialog.dismiss()
+                refreshAlign()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun refreshAlign() {
+        findViewById<MaterialButton>(R.id.btn_align).text = "Picture alignment: ${DisplayAlign.mode(this).label}"
+    }
+
+    /** day/night on the dash. unlike picture quality this applies to the live session. */
+    private fun pickNightMode() {
+        val options = NightMode.Mode.entries
+        val labels = options.map { it.label }.toTypedArray()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setTitle("Day / night")
+            .setSingleChoiceItems(labels, options.indexOf(NightMode.mode(this))) { dialog, which ->
+                NightMode.setMode(this, options[which])
+                LogBus.log("→ day/night: ${options[which].label}")
+                // push now, waiting up to a minute for the tick would make the setting feel broken
+                dev.snaipdefix.opencflink.aa.NightModeSender.instance?.pushNow()
+                dialog.dismiss()
+                refreshNightMode()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun refreshNightMode() {
+        val m = NightMode.mode(this)
+        val now = if (NightMode.isNight(this)) "night" else "day"
+        findViewById<MaterialButton>(R.id.btn_night_mode).text =
+            if (m == NightMode.Mode.AUTO) "Day / night: auto ($now)" else "Day / night: ${m.label}"
+    }
+
+    /** trade picture bits against bluetooth airtime for the helmet audio, see VideoQuality */
     private fun pickVideoQuality() {
         val options = VideoQuality.entries
         val labels = options.map { "${it.label}  ·  ${it.bitrate / 1000} kbps\n${it.hint}" }.toTypedArray()
@@ -470,7 +646,7 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
                 refreshVideoQuality()
                 if (AndroidAutoService.isRunning) {
-                    Toast.makeText(this, "Applies next time you connect", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Applies on the next connect", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Cancel", null)
@@ -479,7 +655,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshVideoQuality() {
         val q = VideoQuality.get(this)
-        findViewById<MaterialButton>(R.id.btn_video_quality).text = "Picture: ${q.label}"
+        findViewById<MaterialButton>(R.id.btn_video_quality).text = "Picture quality: ${q.label}"
     }
 
     private fun openAndroidAutoSettings() {
@@ -511,6 +687,9 @@ class MainActivity : AppCompatActivity() {
         logScroll = findViewById(R.id.log_scroll)
         logView.movementMethod = ScrollingMovementMethod()
 
+        findViewById<MaterialButton>(R.id.btn_report).setOnClickListener {
+            startActivity(Intent(this, ReportActivity::class.java))
+        }
         findViewById<MaterialButton>(R.id.btn_share_log).setOnClickListener { shareLog() }
         findViewById<MaterialButton>(R.id.btn_clear).setOnClickListener {
             LogBus.clear()
@@ -519,29 +698,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Mirror the process-wide log into the view — but only while we're actually on screen.
+     * mirror the log into the view, but only while we're on screen.
      *
-     * Everything (bike PXC, the AA receiver, the video pipeline — including the parts inside the
-     * foreground service) logs through [LogBus], which fires on the caller's thread. During a ride
-     * the phone is pocketed with the screen off, and this listener was still hopping to the main
-     * thread to append + re-scroll for every single line. Attaching in onResume and dropping it in
-     * onPause makes that cost exist only when someone is looking; [LogBus] keeps buffering
-     * regardless, so nothing is lost and Share still exports the whole session.
+     * everything logs through LogBus, which fires on the caller's thread. during a ride the phone is
+     * pocketed with the screen off and this was still hopping to the main thread to append and
+     * re-scroll for every line. attaching in onResume and dropping it in onPause means that only
+     * costs anything when someone's looking. LogBus keeps buffering either way so nothing is lost.
      */
     private fun attachLogListener() {
         logView.text = LogBus.snapshot()
         logScroll.post { logScroll.scrollTo(0, logView.bottom) }
         LogBus.listener = { line ->
             runOnUiThread {
-                // Only follow the tail if the user is already at the bottom — otherwise scrolling back
-                // to read something would keep yanking them down. Check BEFORE appending.
+                // only follow the tail if they're already at the bottom, or scrolling back to read
+                // something keeps yanking them down. check before appending.
                 val follow = !logScroll.canScrollVertically(1)
                 logView.append("$line\n")
                 if (follow) {
-                    // NOT fullScroll(FOCUS_DOWN): despite the name it also MOVES FOCUS to the
-                    // bottom-most focusable view, which stole focus from the "Navigate to" field on
-                    // every single log line (you could only type one letter before it dropped).
-                    // scrollTo() just scrolls and leaves focus alone.
+                    // not fullScroll(FOCUS_DOWN): despite the name it also moves focus to the
+                    // bottom-most focusable view, which stole focus from the destination field on
+                    // every log line, you could type one letter before it dropped. scrollTo() just
+                    // scrolls.
                     logScroll.post { logScroll.scrollTo(0, logView.bottom) }
                 }
             }
@@ -557,7 +734,7 @@ class MainActivity : AppCompatActivity() {
         showBikeInfo()
     }
 
-    /** Nothing on screen → no log mirroring and no 1 Hz status refresh. The ride keeps running. */
+    /** nothing on screen, so no log mirroring and no status tick. the ride keeps going. */
     override fun onPause() {
         LogBus.listener = null
         uiHandler.removeCallbacks(statusTick)
@@ -566,7 +743,7 @@ class MainActivity : AppCompatActivity() {
 
     // ─────────────────────────── status ───────────────────────────
 
-    /** Refresh the status header, the connect button and the control tab once a second. */
+    /** refresh the header, the connect button and the control tab once a second */
     private val statusTick = object : Runnable {
         override fun run() {
             val live = ContextCompat.getColor(this@MainActivity, R.color.status_live)
@@ -588,7 +765,7 @@ class MainActivity : AppCompatActivity() {
 
             refreshConnectButton(aa, bike)
 
-            // Dead keys are worse than no keys: swap the pad for an explanation until AA is live.
+            // dead keys are worse than no keys, so show an explanation until AA is live
             findViewById<View>(R.id.control_body).visibility = if (keys) View.VISIBLE else View.GONE
             findViewById<View>(R.id.control_empty).visibility = if (keys) View.GONE else View.VISIBLE
 
@@ -617,20 +794,19 @@ class MainActivity : AppCompatActivity() {
         connectBtn.iconTint = android.content.res.ColorStateList.valueOf(fg)
 
         connectHint.text = when {
-            !running && BikeCreds.load(applicationContext) == null ->
-                "Scan the bike's QR first (step 1)."
-            !running -> "Ignition on, then tap. No QR needed — the bike is saved."
-            running && !aa -> "Waiting for Android Auto to start projecting…"
-            running && !bike -> "Android Auto is up — joining the bike's Wi-Fi…"
-            else -> "Live. The dash is showing Android Auto."
+            !running && BikeCreds.load(applicationContext) == null -> "Scan the QR first."
+            !running -> "Ignition on, then tap."
+            running && !aa -> "Starting Android Auto…"
+            running && !bike -> "Joining the bike's Wi-Fi…"
+            else -> "Connected. The dash is showing Android Auto."
         }
     }
 
     // ─────────────────────────── plumbing ───────────────────────────
 
     private fun requestPermissions() {
-        // Android 13+: request notification permission up front so the mediaProjection
-        // foreground-service notification can be posted (some setups gate the FGS on it).
+        // android 13+: ask for notifications up front, some setups gate the foreground service on
+        // being able to post its notification
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -640,8 +816,8 @@ class MainActivity : AppCompatActivity() {
             )
         }
 
-        // The Assistant needs the mic BEFORE Android Auto asks for it: AA opens the microphone
-        // channel mid-session, and a denied RECORD_AUDIO there just fails the request silently.
+        // the assistant needs the mic before AA asks for it: AA opens the mic channel mid session
+        // and a denied RECORD_AUDIO there just fails silently
         if (!hasMic()) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 4)
         }
@@ -650,12 +826,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         LogBus.listener = null
         uiHandler.removeCallbacks(statusTick)
-        // When the Android Auto receiver service is running, the whole AA→bike chain (receiver +
-        // encoder in the FGS, plus the Wi-Fi + prober in process globals) must OUTLIVE this activity:
-        // launching Google Android Auto can destroy/recreate MainActivity mid-hand-off, and tearing
-        // the bike down here is exactly what left the dash on a black screen (the pending
-        // onSteadyVideo hand-off was cancelled before it could fire). Only tear down when AA is NOT
-        // running — i.e. the mirror path or a genuine exit. Full teardown is the "Stop" button.
+        // when the receiver service is running the whole chain (receiver + encoder in the service,
+        // wifi + prober in process globals) has to outlive this activity: launching google AA can
+        // destroy and recreate MainActivity mid hand-off, and tearing the bike down here is exactly
+        // what left the dash black, the pending onSteadyVideo hand-off got cancelled before it
+        // fired. only tear down when AA isn't running. the real teardown is the stop button.
         if (!AndroidAutoService.isRunning) {
             AaVideoBridge.onSteadyVideo = null
             prober.stop()
@@ -664,24 +839,23 @@ class MainActivity : AppCompatActivity() {
             ProjectionHolder.projection?.let { try { it.stop() } catch (_: Exception) {} }
             ProjectionHolder.projection = null
             ProjectionService.stop(this)
-            // NOTE: AndroidAutoService is intentionally NOT stopped here — it is a foreground service
-            // meant to keep running when the phone is backgrounded/locked. Use "Stop".
+            // AndroidAutoService is deliberately not stopped here, it's meant to keep running when
+            // the phone is locked. that's what the stop button is for.
             BikeWifi.leave(this, ::log)
         }
         super.onDestroy()
     }
 
     private fun joinAndStart(qr: QrData) {
-        // Hand the connection to BikeReconnector: it owns the Wi-Fi join and re-joins by itself when
-        // the bike's AP drops (ignition off) and returns — no more manual Stop/Start. It uses
-        // applicationContext + the process-global prober, so it survives this activity being
-        // destroyed/recreated (which launching Google Android Auto can cause).
+        // hand the connection to BikeReconnector: it owns the wifi join and rejoins by itself when
+        // the bike's ap drops and comes back. uses applicationContext + the global prober so it
+        // survives this activity being recreated.
         BikeLink.prober = BikeLink.prober ?: prober
         BikeReconnector.connect(applicationContext, qr)
     }
 
     private fun ensureLocationPermission() {
-        // Some OEMs require fine location to associate via WifiNetworkSpecifier.
+        // some oems need fine location to associate via WifiNetworkSpecifier
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
         ) {
@@ -700,7 +874,7 @@ class MainActivity : AppCompatActivity() {
             val uris = ArrayList<Uri>()
             uris.add(FileProvider.getUriForFile(this, "$packageName.fileprovider", file))
 
-            // Attach any diagnostic H.264 dumps (VideoPipeline writes these to <externalFiles>/video).
+            // attach any h264 dumps (VideoPipeline writes these to <externalFiles>/video)
             val videoDir = File(getExternalFilesDir(null), "video")
             val dumps = videoDir.listFiles { f -> f.name.endsWith(".h264") }?.sortedBy { it.name } ?: emptyList()
             for (d in dumps) {
@@ -722,37 +896,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Launch Google Maps turn-by-turn navigation to the typed destination. With Android Auto
-     *  projecting, the navigation appears on the bike dash — no on-dash interaction needed. */
+    /** navigate to whatever was typed. with AA projecting it shows up on the dash. */
     private fun startNavigation() {
         val dest = findViewById<EditText>(R.id.et_destination).text.toString().trim()
         if (dest.isEmpty()) {
             Toast.makeText(this, "Type a destination first", Toast.LENGTH_SHORT).show()
             return
         }
-        // Same launcher the handlebar NAV_* actions use, so both behave identically.
+        // same launcher the handlebar nav actions use, so both behave the same
         if (!NavLauncher.navigate(this, dest, ::log)) {
             Toast.makeText(this, "Couldn't start navigation (Google Maps?)", Toast.LENGTH_SHORT).show()
         }
     }
 
-    /** Emulate one rotary-knob click (-1 back / +1 forward) in the live AA session. */
+    /** one knob click (-1 back, +1 forward) in the live session */
     private fun sendAaScroll(delta: Int) {
         val sink = AaVideoBridge.scrollSink
         if (sink == null) {
-            log("AA control: no active Android Auto session — connect first")
-            Toast.makeText(this, "Start Android Auto first", Toast.LENGTH_SHORT).show()
+            log("no android auto session, connect first")
+            Toast.makeText(this, "Connect first", Toast.LENGTH_SHORT).show()
             return
         }
         sink(delta)
     }
 
-    /** Send an Android Auto key press via the live AA session, or note that none is active. */
+    /** send a key to the live session, or say there isn't one */
     private fun sendAaKey(keycode: Int) {
         val sink = AaVideoBridge.keySink
         if (sink == null) {
-            log("AA control: no active Android Auto session — connect first")
-            Toast.makeText(this, "Start Android Auto first", Toast.LENGTH_SHORT).show()
+            log("no android auto session, connect first")
+            Toast.makeText(this, "Connect first", Toast.LENGTH_SHORT).show()
             return
         }
         sink(keycode)
@@ -761,9 +934,9 @@ class MainActivity : AppCompatActivity() {
     private fun log(msg: String) = LogBus.log(msg)
 
     companion object {
-        /** Process-lived guard so auto-connect fires once, not again on the AA-triggered recreation. */
+        /** so auto connect fires once, not again on the recreation google AA causes */
         @Volatile private var autoConnectDone = false
-        /** Survives the activity recreation Google Android Auto causes, so the tab doesn't jump back. */
+        /** survives the recreation google AA causes, so the tab doesn't jump back */
         @Volatile private var currentTab = 0
     }
 }

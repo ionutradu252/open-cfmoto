@@ -7,7 +7,7 @@ import android.util.Log
  *
  * Mirrors the small subset of headunit-revived's `AppLog` API used by the ported files
  * (printf-style i/d/w/v/e), so those files port with minimal edits. Every line is also
- * forwarded to [sink] — wired to OpenCFLink's on-screen log + Share export — prefixed
+ * forwarded to [sink], wired to OpenCFLink's on-screen log + Share export, prefixed
  * with the `[AA]` stage tag per the project logging convention.
  */
 object AaLog {
@@ -16,7 +16,7 @@ object AaLog {
     /** Flip to true for very chatty per-message logging during bring-up debugging. */
     @Volatile var LOG_VERBOSE = false
 
-    /** Set by [AndroidAutoService]; routes AA logs into the app's on-screen log/LogBus. */
+    /** set by [AndroidAutoService]; routes AA logs into the app's on-screen log/LogBus. */
     @Volatile var sink: ((String) -> Unit)? = null
 
     private fun fmt(msg: String, args: Array<out Any?>): String {
@@ -39,7 +39,7 @@ object AaLog {
     fun w(msg: String, vararg args: Any?) = emit("W: " + fmt(msg, args))
 
     fun e(msg: String, vararg args: Any?) {
-        // If a Throwable was passed as the trailing arg (AppLog.e("msg", exception) style),
+        // if a Throwable was passed as the trailing arg (AppLog.e("msg", exception) style),
         // append its message/stack rather than feeding it to String.format.
         val tr = args.lastOrNull() as? Throwable
         if (tr != null) {

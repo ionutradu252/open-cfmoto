@@ -1,5 +1,5 @@
-// OpenCFLink glue. Streams the phone's microphone to Android Auto over the AAP MIC channel, so
-// "Hey Google" / the Assistant button works — the only hands-free way to set a destination on a bike.
+// streams the phone's mic to AA over the aap MIC channel so the assistant works. the only
+// hands-free way to set a destination on a bike.
 package dev.snaipdefix.opencflink.aa
 
 import android.Manifest
@@ -19,18 +19,17 @@ import java.nio.ByteOrder
 import kotlin.concurrent.thread
 
 /**
- * The head unit's microphone, as far as Android Auto is concerned.
+ * the head unit's microphone, as far as AA is concerned.
  *
- * AA asks for the mic with MICROPHONE_REQUEST(open=true) whenever the Assistant starts; we answer
- * MICROPHONE_RESPONSE and then push raw PCM up the MIC channel until it asks us to close. Previously
- * this request was logged and ignored, which is why voice never worked.
+ * AA sends MICROPHONE_REQUEST(open=true) when the assistant starts. we answer with a
+ * MICROPHONE_RESPONSE and push raw pcm up the MIC channel until it asks us to stop. this request
+ * used to be logged and ignored, which is why voice never worked.
  *
- * Audio source: the phone's `VOICE_RECOGNITION` input. On this bike the rider's mic is a Cardo paired
- * to the BIKE, which bridges it to the phone as a Bluetooth headset — so we route capture to the
- * Bluetooth SCO device when one is present ([preferBluetoothMic]); otherwise the phone's own mic is
- * used. (The dash's `supportMic:false` refers to the DASH's own microphone and is irrelevant here.)
+ * source is the phone's VOICE_RECOGNITION input. the rider's mic is usually a cardo paired to the
+ * BIKE, which bridges it to the phone as a bluetooth headset, so prefer the sco device when there is
+ * one. (the dash's supportMic:false is about the dash's own mic, not this.)
  *
- * Format must match what ServiceDiscoveryResponse advertises: 16 kHz, 16-bit, mono.
+ * format has to match what ServiceDiscoveryResponse advertises: 16khz, 16 bit, mono.
  */
 class AaMicrophone(
     private val context: Context,
@@ -39,7 +38,7 @@ class AaMicrophone(
 ) {
     companion object {
         const val SAMPLE_RATE = 16000
-        /** ~20 ms of audio per message — small enough for snappy voice, big enough to avoid spam. */
+        /** ~20ms of audio per message */
         private const val CHUNK_SAMPLES = SAMPLE_RATE / 50
     }
 
@@ -51,11 +50,11 @@ class AaMicrophone(
     fun hasPermission(): Boolean =
         context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    /** Handle AA's MICROPHONE_REQUEST: open or close the mic, and answer it. */
+    /** open or close the mic and answer AA */
     fun onRequest(open: Boolean, channel: Int) {
         if (open) start() else stop("AA closed the mic")
-        // Answer either way, so AA isn't left waiting. If the open failed (no permission, mic busy)
-        // say so rather than claiming success — otherwise AA sits listening to a stream we never send.
+        // answer either way so AA isn't left waiting. if the open failed (no permission, mic busy)
+        // say so instead of claiming success, or AA sits listening to a stream that never comes.
         val status = if (!open || recording) Common.MessageStatus.STATUS_SUCCESS_VALUE
                      else Common.MessageStatus.STATUS_INTERNAL_ERROR_VALUE
         transport.send(
@@ -99,10 +98,7 @@ class AaMicrophone(
         }
     }
 
-    /**
-     * Prefer the rider's Bluetooth mic (Cardo → bike → phone) over the phone's own, which is
-     * useless in a pocket at 100 km/h.
-     */
+    /** prefer the bluetooth mic (cardo -> bike -> phone). the phone's own is useless in a pocket. */
     private fun preferBluetoothMic() {
         try {
             val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -133,7 +129,7 @@ class AaMicrophone(
         } catch (_: Exception) {}
     }
 
-    /** Read PCM and push it up the MIC channel as AAP media-data messages. */
+    /** read pcm and push it up the MIC channel as aap media data */
     private fun pump(r: AudioRecord) {
         val buf = ShortArray(CHUNK_SAMPLES)
         var sent = 0L
@@ -150,8 +146,8 @@ class AaMicrophone(
     }
 
     /**
-     * One media-data message: `[channel][flags][len][msgType=DATA][timestamp µs BE][PCM…]`.
-     * Built by hand because [AapMessage]'s convenience constructor only takes a protobuf body.
+     * one media data message: [channel][flags][len][msgType=DATA][timestamp us BE][pcm...]
+     * built by hand because AapMessage's convenience constructor only takes a protobuf body.
      */
     private fun micData(samples: ShortArray, count: Int): AapMessage {
         val pcmBytes = count * 2
@@ -159,7 +155,7 @@ class AaMicrophone(
         val total = AapMessage.HEADER_SIZE + MsgType.SIZE + payload
         val data = ByteArray(total)
         data[0] = Channel.ID_MIC.toByte()
-        data[1] = 0x0b                                   // media data (not a control message)
+        data[1] = 0x0b                                   // media data, not a control message
         Utils.intToBytes(MsgType.SIZE + payload, 2, data)
         data[4] = 0                                       // msgType hi — MEDIA_MESSAGE_DATA (0)
         data[5] = 0                                       // msgType lo

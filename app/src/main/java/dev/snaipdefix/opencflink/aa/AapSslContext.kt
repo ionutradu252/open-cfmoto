@@ -1,6 +1,6 @@
 // Ported from headunit-revived (AGPLv3): aap/AapSslContext.kt
 // Pure-JVM SSLEngine driver for the AAP TLS handshake tunnelled inside AAP messages.
-// No native code. Uses Conscrypt as provider when available (falls back to platform TLS).
+// no native code. Uses Conscrypt as provider when available (falls back to platform TLS).
 package dev.snaipdefix.opencflink.aa
 
 import java.nio.ByteBuffer
@@ -87,7 +87,7 @@ class AapSslContext(keyManager: SingleKeyKeyManager) : AapSsl {
         return true
     }
 
-    /** Reads a single complete AAP message from the connection (respects AAP framing). */
+    /** reads a single complete AAP message from the connection (respects AAP framing). */
     private fun readAapMessage(connection: AccessoryConnection): ByteArray? {
         val header = ByteArray(6)
         if (connection.recvBlocking(header, 6, 2000, true) != 6) {

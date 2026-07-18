@@ -19,14 +19,23 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="SESSION LOG"
+            android:text="LOG"
             android:textSize="11sp"
             android:letterSpacing="0.12"
             android:textColor="?attr/colorPrimary" />
 
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_share_log"
+            android:id="@+id/btn_report"
             style="?attr/materialButtonTonalStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Report a problem" />
+
+        <Space android:layout_width="6dp" android:layout_height="wrap_content" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_share_log"
+            style="@style/Widget.Material3.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Share" />
@@ -69,5 +78,5 @@
     <TextView
         style="@style/SettingsHint"
         android:paddingTop="6dp"
-        android:text="Share attaches the full log (plus any video dumps) — that's what to send after a ride if something misbehaved." />
+        android:text="Report a problem fills in your bike and setup for you. Passwords and serials are stripped out automatically." />
 </LinearLayout>

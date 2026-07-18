@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mapping_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,7 +12,7 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         app:navigationIcon="@drawable/ic_back"
-        app:title="Button mapping" />
+        app:title="Buttons" />
 
     <ScrollView
         android:layout_width="match_parent"
@@ -26,11 +27,12 @@
             android:paddingEnd="16dp"
             android:paddingBottom="28dp">
 
-            <TextView style="@style/SettingsSection" android:paddingTop="8dp" android:text="HANDLEBAR GESTURES" />
+            <TextView style="@style/SettingsSection" android:paddingTop="8dp" android:text="ON THE HANDLEBARS" />
 
             <TextView
+                android:id="@+id/tv_bike_note"
                 style="@style/SettingsHint"
-                android:text="Tap a gesture to change what it does. These only apply while “Bike buttons drive Android Auto” is on." />
+                tools:text="Your bike's buttons." />
 
             <com.google.android.material.card.MaterialCardView
                 style="?attr/materialCardViewOutlinedStyle"
@@ -52,7 +54,7 @@
 
             <TextView
                 style="@style/SettingsHint"
-                android:text="Map a gesture to one of these and that button starts turn-by-turn there — the route appears on the dash without touching the phone. The address is whatever Google Maps accepts." />
+                android:text="Map a button to one of these and it starts navigation there." />
 
             <LinearLayout
                 android:id="@+id/places_container"
@@ -61,7 +63,6 @@
                 android:orientation="vertical"
                 android:layout_marginTop="4dp" />
 
-            <!-- Only shown when a nav action is mapped but Android would block the launch. -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/card_overlay"
                 style="?attr/materialCardViewFilledStyle"
@@ -88,7 +89,7 @@
                     <TextView
                         style="@style/SettingsHint"
                         android:paddingTop="6dp"
-                        android:text="Android blocks apps from opening Maps while they're off screen — which is exactly the situation you're in while riding. Allowing “Display over other apps” lifts that. Without it, a navigate button does nothing when the phone is in your pocket." />
+                        android:text="Android won't let the app open Maps while it's off screen, which is where it'll be. Without this, a navigate button does nothing while you ride." />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btn_overlay"

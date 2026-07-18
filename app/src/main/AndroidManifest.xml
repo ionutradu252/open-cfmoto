@@ -62,6 +62,16 @@
             android:name=".ButtonMappingActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".ReportActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+        <!-- keeps the GL preview surface across a rotation instead of tearing it down and back up -->
+        <activity
+            android:name=".DashViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:parentActivityName=".MainActivity" />
         <service
             android:name=".ProjectionService"
             android:exported="false"

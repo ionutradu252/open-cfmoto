@@ -46,7 +46,7 @@ class ProjectionService : Service() {
     }
 
     companion object {
-        /** True once startForeground() has completed — poll this before getMediaProjection(). */
+        /** true once startForeground() has completed, poll this before getMediaProjection(). */
         @Volatile var isForeground = false
             private set
 

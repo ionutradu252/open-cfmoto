@@ -1,9 +1,9 @@
-// OpenCFLink glue (uses AGPLv3 code ported from headunit-revived). Orchestrates the loopback
-// "self-mode" Android Auto Projection receiver:
-//   1. Listen on TCP 127.0.0.1:5288 (+ NSD _aawireless._tcp).
-//   2. Launch Google Android Auto's WirelessStartupActivity pointed at 127.0.0.1:5288 (no VPN).
-//   3. Accept the inbound socket, run the AAP version+SSL handshake, point the H.264 decoder at
-//      the supplied encoder Surface, and start the message loop → AA video flows into the encoder.
+// uses AGPLv3 code ported from headunit-revived.
+// runs the loopback "self mode" android auto receiver:
+// 1. listen on tcp 127.0.0.1:5288 (+ nsd _aawireless._tcp)
+// 2. launch google's WirelessStartupActivity pointed at 127.0.0.1:5288 (no vpn)
+// 3. accept the socket, do the aap version+ssl handshake, point the decoder at the encoder
+// surface, start the read loop. AA video then flows into the encoder.
 package dev.snaipdefix.opencflink.aa
 
 import android.content.Context
@@ -47,7 +47,7 @@ class AaReceiver(
         }
     }
 
-    /** Ensure Conscrypt/AAP logging are wired before anything touches SSL. */
+    /** wire up conscrypt + logging before anything touches ssl */
     fun start() {
         if (running) { log("[AA] already running"); return }
         running = true
@@ -66,13 +66,14 @@ class AaReceiver(
         registerNsd()
 
         acceptThread = thread(name = "aa-accept", isDaemon = true) { acceptLoop() }
-        // Self-mode (launching Google Android Auto) is triggered by MainActivity from the
-        // foreground, via AaSelfMode.trigger(), to satisfy background-activity-launch rules.
+        // MainActivity triggers self mode from the foreground (AaSelfMode.trigger) because of the
+        // background activity launch rules
     }
 
     fun stop() {
         running = false
         try { transport?.microphone?.stop("receiver stop") } catch (_: Exception) {}
+        try { transport?.nightSender?.stop() } catch (_: Exception) {}
         dev.snaipdefix.opencflink.AppStatus.aaConnected = false
         AaVideoBridge.touchSink = null
         AaVideoBridge.keySink = null
@@ -117,6 +118,8 @@ class AaReceiver(
             log("[AA] transport quit (clean=$clean, userExit=${t.wasUserExit})")
             try { t.microphone?.stop("transport quit") } catch (_: Exception) {}
             t.microphone = null
+            try { t.nightSender?.stop() } catch (_: Exception) {}
+            t.nightSender = null
             dev.snaipdefix.opencflink.AppStatus.aaConnected = false
             AaVideoBridge.touchSink = null
             AaVideoBridge.keySink = null
@@ -124,32 +127,37 @@ class AaReceiver(
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
-            // Server keeps listening — AA (or the user) can reconnect.
+            // keep listening, AA (or the user) can reconnect
         }
         transport = t
 
-        // Bike touchscreen → Android Auto: EasyConnProber decodes dash touches (PXC cmdType 32) and
-        // calls this sink with raw bike-canvas coords + a normalised action. Letterbox-map into AA
-        // video space and forward over the AAP INPUT channel. Dropped if the point is in a black bar.
-        // Present the phone's microphone as the head unit's, so the Assistant works (hands-free
-        // destination entry). AA drives it via MICROPHONE_REQUEST — see AapControl.
+        // present the phone's mic as the head unit's, so the assistant works. AA drives it with
+        // MICROPHONE_REQUEST, see AapControl.
         t.microphone = AaMicrophone(context, t, log)
+        // tell AA when it gets dark so the dash isn't a white map at night
+        t.nightSender = NightModeSender(context, t, log).also { it.start() }
 
         val input = AaInput(t, log)
         var loggedTouchMap = false
-        AaVideoBridge.touchSink = { action, cx, cy ->
-            val mapped = AaVideoBridge.pipeline?.mapBikeTouchToSource(cx, cy)
-            if (mapped != null) {
+        AaVideoBridge.touchSink = { action, actionIndex, pointers ->
+            // map every pointer through the same viewport the picture uses, so a tap lands where
+            // the rider sees it. a pointer in a black bar maps to null and is dropped, but only
+            // that one, the rest of the gesture still goes.
+            val mapped = pointers.mapNotNull { (id, cx, cy) ->
+                AaVideoBridge.pipeline?.mapBikeTouchToSource(cx, cy)?.let { Triple(id, it.first, it.second) }
+            }
+            if (mapped.isNotEmpty()) {
                 if (!loggedTouchMap || action != AaInput.ACTION_MOVE) {
-                    log("[AA] touch action=$action bike=($cx,$cy) → AA=(${mapped.first},${mapped.second})")
+                    val where = mapped.joinToString { "#${it.first}=(${it.second},${it.third})" }
+                    log("[AA] touch action=$action idx=$actionIndex → AA $where")
                     loggedTouchMap = true
                 }
-                input.sendTouch(action, mapped.first, mapped.second)
+                input.sendTouch(action, actionIndex.coerceAtMost(mapped.size - 1), mapped)
             }
         }
-        // Phone on-screen D-pad → Android Auto (for non-touch dashes). MainActivity calls this.
+        // phone d-pad -> AA, for non-touch dashes. MainActivity calls this.
         AaVideoBridge.keySink = { keycode -> input.sendKey(keycode) }
-        // Rotary knob emulation — the primary way to step focus through AA's lists.
+        // rotary knob, the main way to step focus through AA's lists
         AaVideoBridge.scrollSink = { delta -> input.sendScroll(delta) }
 
         log("[AA] starting AAP handshake (version + SSL)…")

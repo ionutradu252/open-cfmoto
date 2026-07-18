@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- black borders held back from each edge of the dash, in dash pixels. see ScreenMargins. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp">
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Keeps Android Auto away from an edge, so the dash's own controls there don't get in the way. On an 800NK a top margin clears MotoPlay's pull-down arrow." />
+
+        <TextView
+            android:id="@+id/tv_margin_panel"
+            style="@style/SettingsHint"
+            android:paddingTop="6dp"
+            android:fontFamily="monospace"
+            android:textSize="11sp" />
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="Top">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_margin_top"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Bottom">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_margin_bottom"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Left">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_margin_left"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <com.google.android.material.textfield.TextInputLayout
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.Dense"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="Right">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/et_margin_right"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:maxLines="1" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <TextView
+            style="@style/SettingsHint"
+            android:paddingTop="10dp"
+            android:text="The black bar appears straight away — watch the dash while you change it. Android Auto only re-lays-out its own buttons on the next connect, so reconnect once when you've settled on a number.\n\nLetterbox shrinks the whole picture and loses nothing. Fill keeps it full size and crops a little more at the opposite edge." />
+    </LinearLayout>
+</ScrollView>

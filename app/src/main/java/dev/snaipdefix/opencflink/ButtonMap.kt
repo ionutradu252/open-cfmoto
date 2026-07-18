@@ -3,30 +3,29 @@ package dev.snaipdefix.opencflink
 import android.content.Context
 
 /**
- * Something a handlebar gesture can be made to do.
+ * what a handlebar gesture can be made to do. everything here works with a live AA session and no
+ * touchscreen.
  *
- * Everything here is reachable with a live Android Auto session and no touchscreen. Deliberately
- * absent: media passthrough (next/prev/pause to your music player). While the bike buttons drive
- * Android Auto we hold the media session ourselves, so "pass it back to the player" isn't a thing we
- * can do per-button — that's the [ButtonMode] master switch, all or nothing.
+ * not here on purpose: passing next/prev/pause back to your music player. while the buttons drive
+ * AA we hold the media session ourselves, so that's the ButtonMode switch, all or nothing.
  */
 enum class ButtonAction(val id: String, val label: String) {
-    NONE("none", "Do nothing"),
-    KNOB_FORWARD("knobFwd", "Knob forward (next item)"),
-    KNOB_BACK("knobBack", "Knob back (previous item)"),
-    SELECT("select", "Select / OK"),
+    NONE("none", "Nothing"),
+    KNOB_FORWARD("knobFwd", "Next item"),
+    KNOB_BACK("knobBack", "Previous item"),
+    SELECT("select", "Select"),
     BACK("back", "Back"),
-    HOME("home", "Home (app list)"),
-    ASSISTANT("assistant", "Assistant (voice)"),
+    HOME("home", "Home"),
+    ASSISTANT("assistant", "Assistant"),
     DPAD_UP("up", "D-pad up"),
     DPAD_DOWN("down", "D-pad down"),
     DPAD_LEFT("left", "D-pad left"),
     DPAD_RIGHT("right", "D-pad right"),
-    NAV_1("nav1", "Navigate to saved place 1"),
-    NAV_2("nav2", "Navigate to saved place 2"),
-    NAV_3("nav3", "Navigate to saved place 3");
+    NAV_1("nav1", "Navigate to place 1"),
+    NAV_2("nav2", "Navigate to place 2"),
+    NAV_3("nav3", "Navigate to place 3");
 
-    /** Nav actions read better as the place's own name once one is saved. */
+    /** show the place's own name once one is saved */
     fun displayLabel(context: Context): String = when (this) {
         NAV_1 -> SavedPlaces.actionLabel(context, 0)
         NAV_2 -> SavedPlaces.actionLabel(context, 1)
@@ -40,44 +39,54 @@ enum class ButtonAction(val id: String, val label: String) {
 }
 
 /**
- * The gestures a CFMoto dash can produce.
+ * the gestures a cfmoto dash can produce.
  *
- * The buttons never reach us over PXC; they arrive as Bluetooth AVRCP, in three shapes:
- *   • an absolute-volume write (the direction says which button)
- *   • a bigger absolute-volume jump — the dash coalesces a double tap into ONE message
- *   • a passthrough key: play/pause, or next/previous-track
+ * the buttons never come over pxc, they arrive as bluetooth avrcp in three shapes:
+ *   - an absolute volume write (direction says which button)
+ *   - a bigger volume jump: the dash coalesces a double tap into one message
+ *   - a passthrough key: play/pause or next/prev track
  *
- * **Which physical button makes which is not the same on every dash**, which is why [label] names
- * the AVRCP event and [hint] carries the per-bike translation. On the 450SR, ▲/▼ send volume and
- * next/prev only appear when you HOLD them; on the 800NK, a plain press of ▲/▼ sends next/prev and
- * no volume at all. Naming these by the physical gesture (as an earlier version did) meant deleting
- * [NEXT_KEY]/[PREV_KEY] as "useless holds" on the 450SR — and that silently left the 800NK's ▲/▼
- * doing nothing whatsoever, since those keys are all it has.
+ * these are named after the avrcp event, because that's the only thing that's the same on every
+ * dash. which physical button sends it is not: on the 450SR up/down send volume and next/prev only
+ * come from a hold, on the 800NK left/right send next/prev and there's no volume at all. so the ui
+ * shows BikeProfile.buttonLabel instead of [label] whenever it knows the bike, and falls back to
+ * these names when it doesn't.
  *
- * Dropped, and not coming back: **double-press enter**. The dash won't emit two play/pause events
- * close enough together to tell a double from two singles. Map a volume double tap to
- * [ButtonAction.ASSISTANT] if you want voice from the bars.
+ * naming them after the physical button (an earlier version did) is how NEXT_KEY/PREV_KEY got
+ * deleted as "useless holds" on the 450SR, which quietly left the 800NK with two dead buttons since
+ * those keys are all it has.
+ *
+ * the x2 gestures are timed, unlike the volume doubles where the jump size gives it away. on the
+ * 800NK two deliberate taps land ~230ms apart and one press gives one event, so timing works there.
+ * it didn't for the 450SR's enter, which is really a hold and can't repeat fast enough, hence no
+ * enter x2.
+ *
+ * both default to NONE and the detection is skipped while they're unmapped, see
+ * MediaButtonBridge.pressedWithDouble.
  */
 enum class ButtonGesture(
     val id: String,
+    /** fallback name, used when we don't know the bike. BikeProfile.buttonLabel wins when it does. */
     val label: String,
+    /** what the dash actually sends. the certain part, so it stays the same on every bike. */
     val hint: String,
     val default: ButtonAction,
 ) {
-    VOL_UP_PRESS("volUpPress", "▲ press", "dash sends volume up", ButtonAction.KNOB_BACK),
-    VOL_UP_DOUBLE("volUpDouble", "▲ double tap", "one big volume jump up", ButtonAction.HOME),
-    VOL_DOWN_PRESS("volDownPress", "▼ press", "dash sends volume down", ButtonAction.KNOB_FORWARD),
-    VOL_DOWN_DOUBLE("volDownDouble", "▼ double tap", "one big volume jump down", ButtonAction.BACK),
-    ENTER_PRESS("enterPress", "Enter", "dash sends play/pause", ButtonAction.SELECT),
-    // Pref ids kept from when these were named "hold", so existing mappings survive the rename.
-    NEXT_KEY("volUpHold", "Next-track key", "800NK: ▲ press · 450SR: ▲ hold", ButtonAction.KNOB_FORWARD),
-    PREV_KEY("volDownHold", "Previous-track key", "800NK: ▼ press · 450SR: ▼ hold", ButtonAction.KNOB_BACK),
+    VOL_UP_PRESS("volUpPress", "Volume up press", "dash sends volume up", ButtonAction.KNOB_BACK),
+    VOL_UP_DOUBLE("volUpDouble", "Volume up double tap", "one big volume jump up", ButtonAction.HOME),
+    VOL_DOWN_PRESS("volDownPress", "Volume down press", "dash sends volume down", ButtonAction.KNOB_FORWARD),
+    VOL_DOWN_DOUBLE("volDownDouble", "Volume down double tap", "one big volume jump down", ButtonAction.BACK),
+    ENTER_PRESS("enterPress", "Play/pause press", "dash sends play/pause", ButtonAction.SELECT),
+    // pref ids kept from when these were called "hold", so old mappings survive
+    NEXT_KEY("volUpHold", "Next track press", "dash sends next-track", ButtonAction.KNOB_FORWARD),
+    PREV_KEY("volDownHold", "Previous track press", "dash sends previous-track", ButtonAction.KNOB_BACK),
+    NEXT_DOUBLE("nextDouble", "Next track double tap", "two next-track within 400ms", ButtonAction.NONE),
+    PREV_DOUBLE("prevDouble", "Previous track double tap", "two previous-track within 400ms", ButtonAction.NONE),
 }
 
 /**
- * What each handlebar gesture does. Unset gestures fall back to [ButtonGesture.default], so
- * "reset to defaults" is just clearing the store — and the defaults are exactly the behaviour that
- * was hard-wired before this was configurable.
+ * what each gesture does. unset ones fall back to the gesture's default, so "reset to defaults" is
+ * just clearing the store. the defaults are the behaviour that was hardcoded before this existed.
  */
 object ButtonMap {
     private const val PREF = "button_map"
@@ -93,7 +102,7 @@ object ButtonMap {
         prefs(context).edit().clear().apply()
     }
 
-    /** True when every gesture is still on its default — used to enable/disable the reset button. */
+    /** true when nothing has been changed, so the reset button can grey out */
     fun isAllDefault(context: Context): Boolean =
         ButtonGesture.entries.all { get(context, it) == it.default }
 

@@ -5,16 +5,13 @@ import org.json.JSONObject
 import java.io.OutputStream
 
 /**
- * Strategy for a specific CFMoto dashboard generation ("bike variant").
+ * per-dash settings. the pxc protocol is mostly the same across dashboards but newer head units add
+ * steps and fields the old ones don't, so instead of branching on version numbers all over the
+ * handshake, each dash gets a profile picked from its CLIENT_INFO and asked wherever behaviour
+ * differs.
  *
- * The PXC/EasyConn protocol is broadly the same across dashboards, but newer head units add
- * steps and fields the older ones don't. Rather than branch on version literals all over the
- * handshake, each dashboard gets a [BikeProfile] selected from the bike's CLIENT_INFO
- * ([BikeProfiles.select]) and consulted at the points where behavior diverges.
- *
- * Selected in [PxcHandshake.onClientInfo] and stored on the shared [PxcHandshake] instance;
- * the media plane reaches it via `handshake.profile`. The bike opens the media ports only AFTER
- * the control handshake, so the profile is always chosen before the media plane needs it.
+ * picked in PxcHandshake.onClientInfo; the media plane gets it via handshake.profile. the bike only
+ * opens the media ports after the control handshake so the profile is always ready in time.
  */
 enum class AaResolution(val w: Int, val h: Int) {
     LANDSCAPE_800x480(800, 480),
@@ -23,84 +20,113 @@ enum class AaResolution(val w: Int, val h: Int) {
     PORTRAIT_1080x1920(1080, 1920),
 }
 
-/** The Android Auto video config a dash should request: orientation/size + panel density. */
+/** the Android Auto video config a dash should request: orientation/size + panel density. */
 data class AaVideoSpec(val resolution: AaResolution, val dpi: Int) {
     val width: Int get() = resolution.w
     val height: Int get() = resolution.h
 }
 
 interface BikeProfile {
-    /** Human-readable label — appears in bike-test logs so a capture is self-describing. */
+    /** shows up in logs so a capture says which bike it was */
     val name: String
 
-    /** How strongly this profile claims a given CLIENT_INFO. Highest positive score wins; 0 = no claim. */
+    /** how strongly this profile claims a CLIENT_INFO. highest wins, 0 = no claim. */
     fun score(info: JSONObject): Int
 
     /**
-     * Coarse match from the QR `modelId` — the only bike identity available BEFORE connecting.
-     * Used to pick [aaVideo] up front (Android Auto's resolution must be chosen before AA starts,
-     * which is before the CLIENT_INFO handshake). CLIENT_INFO scoring refines it later.
+     * rough match from the qr modelId, the only id we have before connecting. used to pick aaVideo
+     * up front, since AA's resolution has to be chosen before AA starts and that's before the
+     * CLIENT_INFO handshake. scoring refines it after.
      */
     fun matchesModelId(modelId: String): Boolean = false
 
-    /** The Android Auto video config this dash should request (orientation + size + density). */
+    /** the AA video config this dash should ask for */
     val aaVideo: AaVideoSpec
 
     // ---- capability flags ----
-    /** Bike advertises enableSockServerAuth — likely needs an auth exchange before media (see Cfdl26). */
+    /** bike says enableSockServerAuth, probably needs an auth exchange before media */
     val requiresSockServerAuth: Boolean
     val supportsScreenTouch: Boolean
-    /** Value we advertise in our own CLIENT_INFO reply's `supportFunction`. */
+    /** what we put in our own CLIENT_INFO reply's supportFunction */
     val advertisedSupportFunction: Int
 
-    /** Build the phone's CLIENT_INFO reply (cmd 0x10011). `phoneUuid` is owned by [PxcHandshake]. */
+    /** build the phone's CLIENT_INFO reply (cmd 0x10011) */
     fun buildClientInfoReply(info: JSONObject, huid: String?, phoneUuid: String): JSONObject
 
     /**
-     * Handle a control-plane cmd not covered by [PxcHandshake]'s fixed switch. Return true if the
-     * profile replied/consumed it; false to fall back to the legacy "log only, no reply" behavior.
+     * handle a control cmd PxcHandshake doesn't know. return true if handled, false for the old
+     * "log it, don't reply" behaviour.
      */
     fun handleUnknownControl(
         tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
     ): Boolean
 
-    // ---- media-plane hooks (behavior-preserving defaults; only rounding is wired this pass) ----
-    /** Round and fit requested capture dimensions. Returns Pair(width, height) normalized for this profile. */
+    /** round the requested capture size to something the encoder will take */
     fun roundCaptureDimensions(w: Int, h: Int): Pair<Int, Int> = (w and 0xFFF0) to (h and 0xFFF0)
 
-    /** Whether to force the H.264 encoder to Baseline Profile @ Level 3.1. */
+    /** force the h264 encoder to baseline @ 3.1 */
     val forceBaseline: Boolean get() = true
 
     /**
-     * Some dashboards (e.g. the CFDL16 on modelId 66660742) never send their own control-plane
-     * heartbeat, so the control socket sits idle and the bike's socketTimeoutPeriodWifi watchdog
-     * tears the whole session down every ~7s. When true, EasyConnProber proactively sends
-     * CMD_HEARTBEAT on the control socket to keep the session alive.
+     * some dashes (the CFDL16 on 66660742) never send their own heartbeat, so the control socket
+     * sits idle and the bike's watchdog kills the session every ~7s. when true we send
+     * CMD_HEARTBEAT ourselves to keep it alive.
      */
     val requiresPhoneHeartbeat: Boolean get() = false
 
     /**
-     * How to fit the Android Auto source into the bike canvas when the aspect ratios differ:
-     *   false = letterbox — aspect-preserved, centered, black bars (safe default; nothing cropped).
-     *   true  = fill — scale to cover the whole panel, cropping the overflow (no bars).
+     * how to fit AA into the bike canvas when the aspect doesn't match:
+     *   false = letterbox, black bars, nothing cropped
+     *   true  = fill, covers the panel, crops the overflow
      */
     val fillCanvas: Boolean get() = false
 
     /**
-     * The dash's real panel size, when known (e.g. 800x400). Android Auto only renders at fixed
-     * resolutions (800x480, 1280x720, …), so a 2:1 panel can never be an exact match. Declaring the
-     * difference as MARGINS in service discovery makes AA lay its UI out inside the visible
-     * `panelSize` area and leave the rest empty — the compositor's fill/crop then removes exactly
-     * that empty band, giving a pixel-perfect fit with nothing real cropped and no black bars.
-     * Null = unknown → declare no margins (AA uses the full frame; fill would crop real content).
+     * the dash's real panel size when we know it (e.g. 800x400). AA only renders at fixed sizes
+     * (800x480, 1280x720...) so a 2:1 panel can never match exactly. declaring the difference as
+     * margins makes AA keep its ui inside panelSize and leave the rest empty, and the compositor's
+     * fill crops exactly that empty band, perfect fit, nothing real lost, no bars.
+     * null = unknown, declare no margins (fill would crop real content).
      */
     val panelSize: Pair<Int, Int>? get() = null
 
-    /** Media-plane GET_VERSION reply (version, subVersion). */
+    /** media plane GET_VERSION reply */
     fun versionReply(): Pair<Int, Int> = 3 to 1
+
+    /**
+     * true when we know exactly which buttons this dash sends, so the ui can hide the rest.
+     * false = show every gesture with its generic name, because we're guessing.
+     */
+    val knowsButtons: Boolean get() = false
+
+    /**
+     * what this gesture is on THIS bike's handlebars, e.g. "▲ press". null if the dash can't send
+     * it at all.
+     *
+     * the same avrcp event comes from different buttons on different bikes, so the ui can't name
+     * these generically without lying to somebody. only meaningful when [knowsButtons].
+     */
+    fun buttonLabel(gesture: ButtonGesture): String? = null
 }
 
-/** Registry + selection. Never returns null — falls back to the legacy (BIKE A) profile. */
+/**
+ * a profile with its geometry swapped for what the dash actually asked for last time. everything
+ * else (handshake, acks, capability flags) is delegated to the normal profile, the panel size only
+ * tells us about the screen. see LearnedPanels.
+ */
+private class LearnedGeometryProfile(
+    private val base: BikeProfile,
+    private val panel: Pair<Int, Int>,
+    resolution: AaResolution,
+) : BikeProfile by base {
+    override val name = "${base.name} + measured ${panel.first}x${panel.second}"
+    override val aaVideo = AaVideoSpec(resolution, dpi = base.aaVideo.dpi)
+    override val panelSize = panel
+    /** the point: crop exactly the empty margin band, so nothing real is lost */
+    override val fillCanvas = true
+}
+
+/** registry + selection. never returns null, falls back to legacy. */
 object BikeProfiles {
     val legacy: BikeProfile = LegacyCfdl16Profile
     private val all: List<BikeProfile> = listOf(
@@ -108,50 +134,79 @@ object BikeProfiles {
         Cfdl26LandscapeProfile, LegacyCfdl16Profile,
     )
 
-    /** Authoritative selection from CLIENT_INFO (during the PXC handshake). */
+    /** the real selection, from CLIENT_INFO during the handshake */
     fun select(info: JSONObject, log: (String) -> Unit): BikeProfile {
         val scored = all.map { it to it.score(info) }
         log("[profile] scores=" + scored.joinToString { "${it.first.name}=${it.second}" })
         return scored.filter { it.second > 0 }.maxByOrNull { it.second }?.first ?: legacy
     }
 
-    /** Early selection from the QR code data, before we connect. Falls back to legacy. */
-    fun selectByQr(qr: QrData?): BikeProfile {
+    /**
+     * early selection from the qr, before we connect. pass a context to let a previously measured
+     * panel override the guess (see LearnedPanels).
+     */
+    fun selectByQr(qr: QrData?, context: android.content.Context? = null, log: (String) -> Unit = {}): BikeProfile {
+        val base = selectByQrGuess(qr)
+        if (context == null || qr == null) return base
+
+        // if this bike has told us its screen before, believe it over the model id
+        val panel = LearnedPanels.get(context, qr.ssid) ?: return base
+        if (panel == base.panelSize) return base          // guess already agrees; nothing to say
+        val res = LearnedPanels.bestFit(panel.first, panel.second)
+        if (res == null) {
+            log("[panel] measured ${panel.first}x${panel.second} doesn't fit any AA resolution — keeping ${base.name}")
+            return base
+        }
+        val fitted = LearnedGeometryProfile(base, panel, res)
+        log("[panel] using this bike's measured screen ${panel.first}x${panel.second} → AA ${res.w}x${res.h}" +
+            " (margins ${res.w - panel.first}x${res.h - panel.second})")
+        return fitted
+    }
+
+    /** the model id guess, no learned override */
+    private fun selectByQrGuess(qr: QrData?): BikeProfile {
         if (qr == null) return legacy
         val matches = all.filter { it.matchesModelId(qr.modelId ?: "") }
         if (matches.isEmpty()) return legacy
         if (matches.size == 1) return matches[0]
 
-        // Several CFDL26 bikes share modelId 37426, and the QR carries nothing else that separates
-        // them — so this split decides the AA resolution for all of them, and it has to be decided
-        // HERE: Android Auto's video size is fixed when AA connects, which is before the bike's
-        // CLIENT_INFO (let alone its REQ_CONFIG_CAPTURE) ever arrives.
-        //   • Wi-Fi Direct (DIRECT-… ssid) → 1000 MT-X, tall portrait panel.
-        //   • AP mode → the 800NK. Its 720x712 panel is MEASURED from a real bike log; the 800MT
-        //     profile's geometry never was, so when the two are indistinguishable we go with the one
-        //     we have evidence for. A real 800MT would need a QR-time tell we don't have yet.
+        // several CFDL26 bikes share modelId 37426 and the qr has nothing else to tell them apart,
+        // so this split picks the AA resolution for all of them, and it has to happen here, since
+        // AA's video size is fixed when AA connects, before CLIENT_INFO (never mind
+        // REQ_CONFIG_CAPTURE) shows up.
+        // wifi direct (DIRECT-... ssid) -> 1000 MT-X, tall portrait panel
+        // ap mode -> 800NK. its 720x712 panel is measured from a real log; the 800MT geometry
+        // never was, so when we can't tell them apart go with the one we have evidence for. after
+        // one connect LearnedPanels settles it from the dash itself and this stops mattering.
         val isP2p = qr.supportsP2p || qr.ssid.startsWith("DIRECT-")
         return if (isP2p) Cfdl26PortraitProfile else Cfdl26NkTouchProfile
     }
 
-    /** Legacy helper for backward compatibility / tests. */
+    /** old helper, kept for tests */
     fun selectByModelId(modelId: String?): BikeProfile =
         modelId?.let { id -> all.firstOrNull { it.matchesModelId(id) } } ?: legacy
 }
 
 /**
- * Process-wide active bike profile. Set early from the QR code data ([BikeProfiles.selectByQr])
- * so the Android Auto stack ([ServiceDiscoveryResponse]) can request the right resolution before AA
- * starts, then confirmed authoritatively from CLIENT_INFO in [PxcHandshake]. Read across the
- * activity + the Android Auto foreground service, so it lives here as a process global (like
- * [ProjectionHolder] / [AaVideoBridge]).
+ * the active profile. set early from the qr so ServiceDiscoveryResponse can ask for the right
+ * resolution before AA starts, then confirmed from CLIENT_INFO. read from both the activity and the
+ * service, so it's a process global like ProjectionHolder / AaVideoBridge.
  */
 object BikeProfileHolder {
     @Volatile var active: BikeProfile = BikeProfiles.legacy
+
+    /**
+     * the panel size we actually told AA about, recorded when ServiceDiscoveryResponse is built.
+     *
+     * this is not always [active]'s panel. AA connects on the qr guess, then CLIENT_INFO arrives and
+     * we refine the profile, but service discovery has already gone out, so AA is still laying out to
+     * the old number. logging active.panelSize after that point claims a margin we never sent, which
+     * is exactly the thing you'd check first when taps miss.
+     */
+    @Volatile var declaredPanel: Pair<Int, Int>? = null
 }
 
-/** Shared base CLIENT_INFO reply. Keys/order match the original PxcHandshake.buildClientInfoReply so
- *  that LegacyCfdl16Profile (supportFunction=0) produces byte-identical output. */
+/** shared base CLIENT_INFO reply. key order matches the original so legacy output is identical. */
 private fun basePhoneClientInfo(huid: String?, phoneUuid: String, supportFunction: Int): JSONObject =
     JSONObject().apply {
         put("pxcVersion", "1.0.2")
@@ -172,9 +227,9 @@ private fun basePhoneClientInfo(huid: String?, phoneUuid: String, supportFunctio
     }
 
 /**
- * BIKE A — the CFDL16 head unit (sdkVersion 0.9.29.1) the app was reverse-engineered against and
- * confirmed working end-to-end. This profile reproduces the current behavior EXACTLY (byte-identical
- * CLIENT_INFO reply, no reply to unknown cmds) and is the safe default for any unrecognized bike.
+ * bike A, the CFDL16 head unit (sdk 0.9.29.1) this was reverse engineered against and confirmed
+ * working. reproduces the original behaviour exactly and is the safe default for anything we don't
+ * recognise.
  */
 object LegacyCfdl16Profile : BikeProfile {
     override val name = "CFDL16 / legacy (BIKE A)"
@@ -182,13 +237,13 @@ object LegacyCfdl16Profile : BikeProfile {
     override val supportsScreenTouch = false
     override val advertisedSupportFunction = 0
 
-    /** The 675's 5" panel is landscape ~800x386. */
+    /** the 675's 5" panel is landscape, ~800x386 */
     override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)
 
-    /** Known 675 QR modelId. Legacy is also the fallback, so this is just for a positive early match. */
+    /** known 675 modelId. legacy is the fallback anyway, this is just an early match. */
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "37416"
 
-    /** Constant floor so legacy always wins ties and is the guaranteed fallback. */
+    /** constant floor so legacy wins ties and is always available as a fallback */
     override fun score(info: JSONObject): Int = 1
 
     override fun buildClientInfoReply(info: JSONObject, huid: String?, phoneUuid: String): JSONObject =
@@ -196,24 +251,20 @@ object LegacyCfdl16Profile : BikeProfile {
 
     override fun handleUnknownControl(
         tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
-    ): Boolean = false  // reproduces the original "log only, no reply" else-branch
+    ): Boolean = false  // the original "log it, no reply" behaviour
 }
 
-/**
- * BIKE B — the CFDL26 / MotoPlay head unit on the 1000 MT-X (sdkVersion 1.1.4,
- * package com.cfmoto.cfdashmotoplay, enableSockServerAuth=true, WiFi-Direct P2P).
- */
+/** bike B, CFDL26 / MotoPlay on the 1000 MT-X (sdk 1.1.4, cfdashmotoplay, wifi direct). */
 object Cfdl26PortraitProfile : BikeProfile {
     override val name = "CFDL26 / MotoPlay Portrait (1000 MT-X)"
     override val requiresSockServerAuth = true
     override val supportsScreenTouch = true
     override val advertisedSupportFunction = 128
 
-    /** The 1000 MT-X's 8" panel is a tall PORTRAIT screen (requests ~800x951). Ask AA for portrait
-     *  720x1280 at the panel's advertised 240 dpi; the compositor letterboxes it into the canvas. */
+    /** the 1000 MT-X's 8" panel is tall portrait (asks for ~800x951). portrait 720x1280 @240dpi. */
     override val aaVideo = AaVideoSpec(AaResolution.PORTRAIT_720x1280, dpi = 240)
 
-    /** Known CFDL26 / 1000 MT-X QR modelId (from the bike's pairing QR). */
+    /** known CFDL26 / 1000 MT-X modelId */
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "37426"
 
     override fun score(info: JSONObject): Int {
@@ -235,10 +286,10 @@ object Cfdl26PortraitProfile : BikeProfile {
     override fun handleUnknownControl(
         tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
     ): Boolean {
-        // After CHECK_SN the CFDL26 unit sends a burst of JSON notify frames the older CFDL16 never
-        // did — 0x10780 (log), 0x103a0 (OTA FTP creds), 0x10020 (media-feature flags), and possibly
-        // more — and will NOT connect to the media ports until each is acked. The whole PXC protocol
-        // acks with reply = cmd+1 (empty), so ack every otherwise-unhandled control frame that way.
+        // after CHECK_SN the CFDL26 sends a burst of json frames the CFDL16 never did, 0x10780
+        // (log), 0x103a0 (ota ftp creds), 0x10020 (media flags), maybe more, and won't connect to
+        // the media ports until each is acked. pxc acks with cmd+1 (empty), so do that for every
+        // control frame we don't otherwise handle.
         val body = if (frame.payload.isEmpty()) "" else String(frame.payload, Charsets.UTF_8)
         val hex = if (frame.payload.isEmpty()) "" else
             " hex=" + BleProtocol.bytesToHex(frame.payload.copyOf(minOf(48, frame.payload.size)))
@@ -251,20 +302,15 @@ object Cfdl26PortraitProfile : BikeProfile {
     }
 }
 
-/**
- * BIKE C — the CFDL26 / MotoPlay head unit on the 800MT (sdkVersion 1.1.2,
- * package com.cfmoto.easyconnect, enableSockServerAuth=true, AP mode).
- */
+/** bike C, CFDL26 / MotoPlay on the 800MT (sdk 1.1.2, easyconnect, ap mode). */
 object Cfdl26LandscapeProfile : BikeProfile {
     override val name = "CFDL26 / MotoPlay Landscape (800MT)"
     override val requiresSockServerAuth = true
     override val supportsScreenTouch = true
     override val advertisedSupportFunction = 128
 
-    /** The 800MT has a landscape screen. Ask AA for landscape 800x480 — the resolution proven to
-     *  stream end-to-end on this dash (see docs/05-DEBUG-KNOWLEDGE.md). The compositor letterboxes it
-     *  into the bike's ~1280x576 canvas. 1280x720 is sharper but unverified end-to-end; revisit once
-     *  AA is confirmed working. */
+    /** the 800MT is landscape. 800x480 is the size proven to stream on this dash. never verified
+     * with AA end to end, the geometry here is from docs, not a real bike. */
     override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)
 
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "37426"
@@ -285,13 +331,9 @@ object Cfdl26LandscapeProfile : BikeProfile {
             put("supportScreenTouch", true)
         }
 
-    // Baseline@3.1 (the interface default). This USED to be false (Main/High), which is the prime
-    // suspect for the Android Auto black screen: the dash accepts and continuously pulls our Main/High
-    // frames but renders nothing (embedded decoders often only handle Baseline — no CABAC/B-frame
-    // reordering, which the PTS-less bike wire format can't support anyway). Baseline is a strict
-    // subset, so it cannot regress the working mirror path, and createEncoder falls back to default
-    // if a device can't configure it. See docs/05-DEBUG-KNOWLEDGE.md §2.
-    // override val forceBaseline defaults to true.
+    // baseline@3.1 (the interface default). this used to be false (main/high) which is the prime
+    // suspect for the old AA black screen: the dash pulls main/high frames happily and renders
+    // nothing, since embedded decoders usually only do baseline. see docs/05-DEBUG-KNOWLEDGE.md.
 
     override fun handleUnknownControl(
         tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
@@ -301,41 +343,52 @@ object Cfdl26LandscapeProfile : BikeProfile {
 }
 
 /**
- * BIKE E — the CFDL26 head unit on the 800NK: a TOUCHSCREEN, and a nearly-square 720x712 panel
- * (sdkVersion 1.1.2, package com.cfmoto.easyconnect, version_name CFDL26.2.3.0.5, AP mode).
- * Built from a real bike log (2026-07-16), including the geometry.
+ * bike E, CFDL26 on the 800NK. touchscreen, and a nearly square 720x712 panel (sdk 1.1.2,
+ * easyconnect, version_name CFDL26.2.3.0.5, ap mode). built from a real log, geometry included.
  *
- * **The panel is 720x712** — measured, not guessed: the dash asks for exactly that in
- * REQ_CONFIG_CAPTURE. Nothing Android Auto can render is anywhere near 1.01:1, which is why landing
- * on the 800MT profile (AA landscape 800x480) looked so wrong: letterbox squeezed the picture into a
- * 720x432 strip with 136px bars top and bottom, and fill scaled it to 1173x704 and threw away 226px
- * off *each side*.
+ * the panel is 720x712, measured, the dash asks for exactly that in REQ_CONFIG_CAPTURE. nothing AA
+ * renders is close to 1.01:1, which is why the 800MT profile (landscape 800x480) looked so wrong:
+ * letterbox squeezed it into a 720x432 strip with 136px bars, fill blew it up to 1173x704 and threw
+ * away 226px off each side.
  *
- * The fix is the margin trick the 450SR already uses, turned on its side. Ask AA for PORTRAIT
- * 720x1280: the width matches the panel EXACTLY, so pixels map 1:1 with no scaling at all, and
- * declaring marginHeight = 1280 − 712 = 568 makes AA keep its UI inside a 720x712 band centred in
- * that canvas. The compositor's fill then crops away precisely the empty band above and below.
+ * fix is the 450SR's margin trick on its side: ask AA for portrait 720x1280. the width matches the
+ * panel exactly so pixels map 1:1 with no scaling, and marginHeight = 1280-712 = 568 keeps AA's ui
+ * in a 720x712 band in the middle. the compositor's fill then crops exactly the empty band.
  *
- * The margin is a big fraction of the canvas (44%, against 17% on the 450SR), so this is the part
- * most likely to need adjusting — if AA lays out badly, that ratio is the first thing to look at.
- * [AaVideoSpec.dpi] is the other guess: 160 mirrors the 450SR, but this panel is physically smaller
- * per pixel, so the UI may come out large.
+ * the margin is 44% of the canvas (vs 17% on the 450SR), so it's the most likely thing to need
+ * changing if AA lays out badly. dpi 160 is a guess copied from the 450SR; this panel is denser so
+ * the ui might come out big.
  */
 object Cfdl26NkTouchProfile : BikeProfile {
     override val name = "CFDL26 / 800NK (touch, 720x712)"
     override val requiresSockServerAuth = true
     override val supportsScreenTouch = true
     override val advertisedSupportFunction = 128
-    /** Crop the empty band AA leaves above/below its UI — see the margin note above. */
+    /** crop the empty band above/below AA's ui, see above */
     override val fillCanvas = true
-    /** Measured from the bike's REQ_CONFIG_CAPTURE (w=720 h=712). */
+    /** measured from the bike's REQ_CONFIG_CAPTURE (w=720 h=712) */
     override val panelSize = 720 to 712
 
-    /** Width matches the panel exactly → 1:1 pixels; marginHeight = 1280 − 712 = 568. */
+    /** width matches the panel exactly so pixels are 1:1. marginHeight = 1280-712 = 568. */
     override val aaVideo = AaVideoSpec(AaResolution.PORTRAIT_720x1280, dpi = 160)
 
-    /** Shared with the 1000 MT-X and 800MT — [BikeProfiles.selectByQr] does the real splitting. */
+    /** shared with the 1000 MT-X and 800MT, selectByQr does the real splitting */
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "37426"
+
+    /**
+     * from a press-every-button capture (2026-07-17): left/right send next/prev, star sends
+     * play/pause, and fn / voice / up / down send nothing at all, over neither avrcp nor pxc.
+     * up/down are the dash's own volume, voice runs its local speech engine.
+     */
+    override val knowsButtons = true
+    override fun buttonLabel(gesture: ButtonGesture): String? = when (gesture) {
+        ButtonGesture.PREV_KEY -> "◀ press"
+        ButtonGesture.PREV_DOUBLE -> "◀ double tap"
+        ButtonGesture.NEXT_KEY -> "▶ press"
+        ButtonGesture.NEXT_DOUBLE -> "▶ double tap"
+        ButtonGesture.ENTER_PRESS -> "★ press"
+        else -> null
+    }
 
     override fun score(info: JSONObject): Int {
         var s = 0
@@ -345,8 +398,8 @@ object Cfdl26NkTouchProfile : BikeProfile {
         val sdk = info.optString("sdkVersion")
         if (sdk.isNotEmpty() && !sdk.startsWith("0.")) s += 2
         if (info.optInt("supportFunction", 0) == 128) s += 1
-        // Concrete markers from the 800NK log. Everything above this line is also true of the
-        // (unverified) 800MT profile — these are what break the tie in favour of measured geometry.
+        // markers from the 800NK log. everything above is also true of the (unverified) 800MT
+        // profile, these are what break the tie towards the geometry we've measured.
         if (info.optString("version_name") == "CFDL26.2.3.0.5") s += 3
         if (info.optString("HUID").startsWith("6KWV")) s += 2
         if (info.optBoolean("supportMirrorOverlayTouch", false)) s += 1
@@ -364,43 +417,66 @@ object Cfdl26NkTouchProfile : BikeProfile {
 }
 
 /**
- * BIKE D — a CFDL16-class MotoPlay head unit seen on modelId 66660742 (HUName "CFMOTO-4A71BD",
- * HUID CRCP24…, sdkVersion 0.9.23.4, flavor 65540, Wi-Fi Direct "DIRECT-go-CFMOTO-…").
+ * bike D, CFDL16-class MotoPlay on modelId 66660742 (HUName CFMOTO-4A71BD, sdk 0.9.23.4, flavor
+ * 65540, wifi direct DIRECT-go-CFMOTO-...). the 450SR.
  *
- * Despite the newer modelId this is a 0.9.x unit like the 675 (BIKE A): a LANDSCAPE panel that
- * requests an 800x400 capture, supportScreenTouch=false, mirrorMode. But unlike the 675 it
- * advertises supportFunction=128 and sends the CFDL26-style control burst (0x103b0 password,
- * 0x10470 voice cmds, 0x104a0 OTA ports), so those must be acked.
+ * despite the newer modelId this is a 0.9.x unit like the 675: landscape panel asking for an 800x400
+ * capture, no touch, mirrorMode. but unlike the 675 it says supportFunction=128 and sends the
+ * CFDL26 control burst (0x103b0 password, 0x10470 voice cmds, 0x104a0 ota ports) which have to be
+ * acked.
  *
- * Without this profile the three existing profiles all score 1 and the tie resolves to CFDL26
- * PORTRAIT, which asks Android Auto for 720x1280 — a tall image the compositor letterboxes into a
- * narrow centered strip on this wide panel (the "stretched to portrait" symptom). This profile
- * pins it to LANDSCAPE 800x480 so the image fills the panel in the right orientation.
+ * without this profile the other three all score 1 and the tie went to CFDL26 portrait, which asks
+ * AA for 720x1280, a tall image letterboxed into a narrow strip on this wide panel, i.e. the
+ * "stretched to portrait" symptom.
  */
 object Cfdl16MotoPlayLandscapeProfile : BikeProfile {
     override val name = "CFDL16 / MotoPlay Landscape (modelId 66660742)"
     override val requiresSockServerAuth = false
     override val supportsScreenTouch = false
-    /** The bike reports supportFunction=128; echo it (but do NOT claim touch — it has none). */
+    /** the bike says supportFunction=128, echo it. don't claim touch, it has none. */
     override val advertisedSupportFunction = 128
-    /** This unit never heartbeats us → the phone must, or the ~7s watchdog resets the session. */
+    /** this one never heartbeats us, so we have to, or its ~7s watchdog kills the session */
     override val requiresPhoneHeartbeat = true
-    /** Fill the whole 800x400 landscape panel (crop the 40px top/bottom margin AA leaves empty). */
+    /** fill the 800x400 panel, cropping the 40px top/bottom margin AA leaves empty */
     override val fillCanvas = true
-    /** Verified from the bike's REQ_CONFIG_CAPTURE: it asks for an 800x400 capture. With AA at
-     *  800x480 this declares marginHeight=80, so AA keeps its UI in the visible 800x400 band. */
+    /** from the bike's REQ_CONFIG_CAPTURE: it asks for 800x400. with AA at 800x480 that's
+     * marginHeight=80, so AA keeps its ui in the visible 800x400 band. */
     override val panelSize = 800 to 400
 
-    /** Landscape ~800x400 panel → request AA landscape 800x480; the compositor fits it to 800x400. */
+    /** ~800x400 landscape panel, so AA landscape 800x480 and the compositor fits it */
     override val aaVideo = AaVideoSpec(AaResolution.LANDSCAPE_800x480, dpi = 160)
 
     override fun matchesModelId(modelId: String): Boolean = modelId.trim() == "66660742"
 
+    /**
+     * measured on the bike: up/down send volume, holding them sends next/prev track, and holding
+     * enter sends play/pause.
+     *
+     * the holds were hidden for a while after a test where they seemed dead. that was wrong: later
+     * logs show KEYCODE_MEDIA_NEXT/PREVIOUS arriving and driving the knob exactly like a press does
+     * ("[BTN] Next track press -> Next item -> sendScroll delta=1"). they're back, and they're the
+     * only spare gestures this dash has.
+     *
+     * no x2 on any of them. they're holds, and a hold can't repeat fast enough for the timer to
+     * read two of them, which is the same reason there's no enter x2. see ButtonGesture.
+     */
+    override val knowsButtons = true
+    override fun buttonLabel(gesture: ButtonGesture): String? = when (gesture) {
+        ButtonGesture.VOL_UP_PRESS -> "▲ press"
+        ButtonGesture.VOL_UP_DOUBLE -> "▲ double tap"
+        ButtonGesture.VOL_DOWN_PRESS -> "▼ press"
+        ButtonGesture.VOL_DOWN_DOUBLE -> "▼ double tap"
+        ButtonGesture.ENTER_PRESS -> "Enter hold"
+        ButtonGesture.NEXT_KEY -> "▲ hold"
+        ButtonGesture.PREV_KEY -> "▼ hold"
+        else -> null
+    }
+
     override fun score(info: JSONObject): Int {
         var s = 0
-        // Definitive: CLIENT_INFO echoes the QR modelId in `channel`.
+        // CLIENT_INFO echoes the qr modelId in `channel`
         if (info.optString("channel") == "66660742") s += 10
-        // 0.9.x SDK ⇒ CFDL16-class, not a CFDL26 (1.1.x) unit — disambiguates from the CFDL26 profiles.
+        // 0.9.x sdk means CFDL16 class, not a CFDL26 (1.1.x) unit
         if (info.optString("sdkVersion").startsWith("0.9")) s += 2
         if (info.optBoolean("supportLandscapeAdaptive", false)) s += 1
         if (!info.optBoolean("supportScreenTouch", false)) s += 1
@@ -410,8 +486,8 @@ object Cfdl16MotoPlayLandscapeProfile : BikeProfile {
     override fun buildClientInfoReply(info: JSONObject, huid: String?, phoneUuid: String): JSONObject =
         basePhoneClientInfo(huid, phoneUuid, advertisedSupportFunction)
 
-    // 0.9.x but it DOES send the CFDL26 control burst — ack every otherwise-unhandled control frame
-    // (reply = cmd+1, empty) exactly like the CFDL26 profiles, or the bike stalls waiting for acks.
+    // 0.9.x but it does send the CFDL26 control burst, so ack everything we don't handle (cmd+1,
+    // empty) like the CFDL26 profiles or the bike stalls waiting
     override fun handleUnknownControl(
         tag: String, frame: PxcFrame, out: OutputStream, log: (String) -> Unit,
     ): Boolean = Cfdl26PortraitProfile.handleUnknownControl(tag, frame, out, log)

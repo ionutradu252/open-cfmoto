@@ -1,29 +1,27 @@
-// OpenCFLink (uses AGPLv3 code/protocol ported from headunit-revived). Injects touch input into the
-// Android Auto session: the CFMoto dash is a touchscreen and reports touches over PXC (see
-// EasyConnProber cmdType 32); this forwards them to Gearhead over the AAP INPUT channel so Maps/Waze
-// can be driven from the bike.
+// uses AGPLv3 code/protocol ported from headunit-revived.
+// input into the AA session: touches from the dash (pxc cmdType 32) and keys from the app, over the
+// aap INPUT channel.
 package dev.snaipdefix.opencflink.aa
 
 import android.os.SystemClock
 import dev.snaipdefix.opencflink.aa.proto.Input
 
 /**
- * Sends touch events to Android Auto over the INPUT channel (declared as a touchscreen in
- * [ServiceDiscoveryResponse], sized to the AA video). Coordinates must already be in AA video space
- * (0..width, 0..height) — the caller letterbox-maps from the bike canvas first.
+ * sends touch/key events to AA over the INPUT channel. coordinates must already be in AA video space
+ * (0..width, 0..height), the caller maps them from the bike canvas first.
  */
 class AaInput(
     private val transport: AapTransport,
     private val log: (String) -> Unit,
 ) {
-    /** Normalised actions from the bike decoder. */
+    /** normalised actions from the bike decoder */
     companion object {
         const val ACTION_DOWN = 0
         const val ACTION_UP = 1
         const val ACTION_MOVE = 2
 
-        // Android KeyEvent keycodes Android Auto understands for D-pad / rotary focus navigation.
-        // Advertised in ServiceDiscoveryResponse.keycodesSupported and sent by [sendKey].
+        // keycodes AA understands for d-pad / rotary focus. advertised in
+        // ServiceDiscoveryResponse.keycodesSupported and sent by sendKey.
         const val KEY_UP = 19     // KEYCODE_DPAD_UP
         const val KEY_DOWN = 20   // KEYCODE_DPAD_DOWN
         const val KEY_LEFT = 21   // KEYCODE_DPAD_LEFT
@@ -33,29 +31,24 @@ class AaInput(
         const val KEY_HOME = 3    // KEYCODE_HOME
 
         /**
-         * The AAP "rotary controller" scroll-wheel code. We have no physical knob and never SEND it,
-         * but advertising it is what tells Android Auto this is a rotary/non-touch head unit — which
-         * is what makes AA render a focus highlight for the D-pad keys to move. Without it AA accepts
-         * the keys (HOME works) but has no focus to navigate, so the arrows do nothing. Verified
-         * symptom in the 2026-07-16 bike log.
+         * the aap rotary scroll wheel code. we have no physical knob and never send it, but
+         * advertising it is what tells AA we're a rotary head unit, which is what makes it draw a
+         * focus highlight for the d-pad keys to move. without it AA takes the keys (home works) but
+         * has no focus, so the arrows do nothing. seen in the 2026-07-16 log.
          */
         const val KEY_SCROLL_WHEEL = 65536
 
-        /** KEYCODE_SEARCH — what a head unit sends for its "voice / Assistant" button. */
+        /** KEYCODE_SEARCH, what a head unit sends for its voice button */
         const val KEY_ASSISTANT = 84
 
-        /** All keycodes we advertise — declared to AA so it enables rotary/focus navigation. */
+        /** everything we advertise, so AA turns on rotary/focus navigation */
         val SUPPORTED_KEYCODES = intArrayOf(
             KEY_SCROLL_WHEEL, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_BACK, KEY_HOME,
             KEY_ASSISTANT,
         )
     }
 
-    /**
-     * Send one key press (down then up) to Android Auto over the INPUT channel. Used by the phone's
-     * on-screen D-pad so a non-touch dash can be driven (set a destination, then ride). AA acts on
-     * these when the head unit advertised the keycodes ([SUPPORTED_KEYCODES]) in service discovery.
-     */
+    /** one key press (down then up). AA only acts on these if we advertised the keycode. */
     fun sendKey(keycode: Int) {
         try {
             sendKeyReport(keycode, down = true)
@@ -67,14 +60,12 @@ class AaInput(
     }
 
     /**
-     * Emulate one click of the rotary knob: [delta] -1 = rotate back (focus to the previous item),
-     * +1 = rotate forward (next item).
+     * one click of the rotary knob. -1 = back, +1 = forward.
      *
-     * On a rotary head unit — which is what AA treats us as, now that we advertise
-     * [KEY_SCROLL_WHEEL] — the KNOB is the primary navigation: it steps focus through list items.
-     * The D-pad only jumps coarsely between panes/regions, which is exactly why the arrows move
-     * between the app-list and taskbar but can't step *within* them (2026-07-16 bike test). This
-     * sends the rotation AA is waiting for, as a RelativeEvent on the INPUT channel.
+     * on a rotary head unit (which is what AA thinks we are, since we advertise KEY_SCROLL_WHEEL)
+     * the knob is the main navigation, it steps focus through list items. the d-pad only jumps
+     * between panes, which is why the arrows move between the app list and taskbar but can't step
+     * inside them (2026-07-16 test).
      */
     fun sendScroll(delta: Int) {
         try {
@@ -110,10 +101,15 @@ class AaInput(
     }
 
     /**
-     * @param action one of [ACTION_DOWN]/[ACTION_UP]/[ACTION_MOVE]
-     * @param x,y    pointer position in AA video coordinates
+     * one touch report: every pointer currently down, and which one changed.
+     *
+     * pointers is (id, x, y) in AA video coords; actionIndex indexes into that list, not the id.
+     * reporting all of them is what aap wants and what makes pinch work. the old single-pointer
+     * version hardcoded pointerId=0 and actionIndex=0, so a second finger arrived as another
+     * first-finger down and AA saw a corrupt gesture stream.
      */
-    fun sendTouch(action: Int, x: Int, y: Int) {
+    fun sendTouch(action: Int, actionIndex: Int, pointers: List<Triple<Int, Int, Int>>) {
+        if (pointers.isEmpty()) return
         val pointerAction = when (action) {
             ACTION_DOWN -> Input.TouchEvent.PointerAction.TOUCH_ACTION_DOWN
             ACTION_UP -> Input.TouchEvent.PointerAction.TOUCH_ACTION_UP
@@ -122,17 +118,17 @@ class AaInput(
         }
         try {
             val touch = Input.TouchEvent.newBuilder()
-                .addPointerData(
-                    Input.TouchEvent.Pointer.newBuilder()
-                        .setX(x).setY(y).setPointerId(0).build()
+            for ((id, x, y) in pointers) {
+                touch.addPointerData(
+                    Input.TouchEvent.Pointer.newBuilder().setX(x).setY(y).setPointerId(id).build()
                 )
-                .setActionIndex(0)
-                .setAction(pointerAction)
-                .build()
+            }
+            touch.actionIndex = actionIndex.coerceIn(0, pointers.size - 1)
+            touch.action = pointerAction
             val report = Input.InputReport.newBuilder()
-                // AAP input timestamps are a monotonic microsecond clock.
+                // aap input timestamps are a monotonic microsecond clock
                 .setTimestamp(SystemClock.elapsedRealtimeNanos() / 1000)
-                .setTouchEvent(touch)
+                .setTouchEvent(touch.build())
                 .build()
             transport.send(AapMessage(Channel.ID_INP, Input.MsgType.EVENT_VALUE, report))
         } catch (e: Exception) {

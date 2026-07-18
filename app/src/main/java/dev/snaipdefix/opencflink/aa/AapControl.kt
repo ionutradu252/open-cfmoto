@@ -1,7 +1,7 @@
 // Adapted from headunit-revived (AGPLv3): aap/AapControl.kt
 // Trimmed for video-only headless projection: no audio sink / system audio focus, no mic
 // recorder, no Settings/Context UI. gainVideoFocus() is replaced by sending VideoFocusEvent
-// directly (there is no projection Activity — the encoder surface is always ready).
+// directly (there is no projection Activity, the encoder surface is always ready).
 package dev.snaipdefix.opencflink.aa
 
 import dev.snaipdefix.opencflink.aa.proto.Common
@@ -41,8 +41,7 @@ internal class AapControlMedia(private val aapTransport: AapTransport) : AapCont
                 return 0
             }
             Media.MsgType.MEDIA_MESSAGE_MICROPHONE_REQUEST_VALUE -> {
-                // AA wants the mic (Assistant starting/stopping). Open it and stream PCM back —
-                // voice is the only hands-free way to set a destination on a bike.
+                // AA wants the mic (assistant starting/stopping). open it and stream pcm back.
                 val req = message.parse(Media.MicrophoneRequest.newBuilder()).build()
                 AaLog.i("RX: Microphone request open=%b", req.open)
                 aapTransport.microphone?.onRequest(req.open, message.channel)
@@ -61,7 +60,7 @@ internal class AapControlMedia(private val aapTransport: AapTransport) : AapCont
     private fun mediaStartRequest(request: Media.Start, channel: Int): Int {
         AaLog.i("Media Start Request %s: session=%d, config_index=%d", Channel.name(channel), request.sessionId, request.configurationIndex)
         aapTransport.setSessionId(channel, request.sessionId)
-        // The mic must echo this session id back in its MICROPHONE_RESPONSE.
+        // the mic has to echo this session id back in its MICROPHONE_RESPONSE
         if (channel == Channel.ID_MIC) aapTransport.microphone?.setSessionId(request.sessionId)
         return 0
     }
@@ -78,7 +77,7 @@ internal class AapControlMedia(private val aapTransport: AapTransport) : AapCont
         aapTransport.send(AapMessage(channel, Media.MsgType.MEDIA_MESSAGE_CONFIG_VALUE, configResponse))
 
         if (channel == Channel.ID_VID) {
-            // Headless: no projection Activity to broadcast to — grant video focus directly so
+            // Headless: no projection Activity to broadcast to, grant video focus directly so
             // the phone starts streaming H.264 into our (always-ready) encoder surface.
             AaLog.i("Video channel set up → sending VideoFocus GAIN")
             aapTransport.send(VideoFocusEvent(gain = true, unsolicited = true))
@@ -144,6 +143,9 @@ internal class AapControlSensor(private val aapTransport: AapTransport) : AapCon
             )
         )
         aapTransport.startSensor(request.type.number)
+        // AA subscribes to NIGHT once per session then waits. answering with STATUS_SUCCESS and
+        // nothing else (all this used to do) left it in day mode forever = white map at night.
+        if (request.type == Sensors.SensorType.NIGHT) aapTransport.nightSender?.pushNow()
         return 0
     }
 }
@@ -227,7 +229,7 @@ internal class AapControlService(private val aapTransport: AapTransport) : AapCo
 
     private fun audioFocusRequest(notification: Control.AudioFocusRequestNotification, channel: Int): Int {
         AaLog.i("Audio Focus Request: ${notification.request}")
-        // Always grant — the phone must believe the head unit has audio focus.
+        // always grant, the phone must believe the head unit has audio focus.
         val mappedState = focusResponse[notification.request]
         if (mappedState != null) {
             val response = Control.AudioFocusNotification.newBuilder().setFocusState(mappedState).build()

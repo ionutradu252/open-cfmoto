@@ -48,8 +48,8 @@ class BleWakeUp(
     fun start() {
         if (scanner == null) { fail("BluetoothLeScanner unavailable"); return }
 
-        // The official app scans by MAC (it knows it from pairing). If we have the MAC,
-        // do the same — most robust. Otherwise scan unfiltered and match by advertised
+        // the official app scans by MAC (it knows it from pairing). If we have the MAC,
+        // do the same, most robust. Otherwise scan unfiltered and match by advertised
         // service UUID or name, logging every candidate so the MAC can be recovered.
         val mac = BleSecrets.BIKE_BLE_MAC
         val settings = ScanSettings.Builder()
@@ -251,7 +251,7 @@ class BleWakeUp(
     private fun handleChallenge(g: BluetoothGatt, protoPayload: ByteArray) {
         val challengeAscii = BleProtocol.unwrapProtoBytes1(protoPayload)
             ?: run { fail("0x5B: bad protobuf framing"); return }
-        // The bike sends the 16-byte ciphertext as 32 hex ASCII chars.
+        // the bike sends the 16-byte ciphertext as 32 hex ASCII chars.
         val asciiStr = String(challengeAscii, Charsets.US_ASCII)
         log("[BLE]   challenge ascii=$asciiStr (len=${challengeAscii.size})")
         val challengeBytes = try { BleProtocol.hexToBytes(asciiStr) } catch (e: Exception) {

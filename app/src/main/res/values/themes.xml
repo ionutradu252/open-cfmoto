@@ -89,6 +89,20 @@
         <item name="android:paddingBottom">2dp</item>
     </style>
 
+    <!-- every settings switch and button uses these, so the rows line up without copy-paste -->
+    <style name="SettingRow" parent="Widget.Material3.CompoundButton.MaterialSwitch">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">48dp</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="SettingButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+    </style>
+
     <!-- D-pad / knob keys. Big and square-ish so they're thumbable with gloves on. -->
     <style name="PadKey" parent="Widget.Material3.Button.TonalButton">
         <item name="android:layout_width">0dp</item>

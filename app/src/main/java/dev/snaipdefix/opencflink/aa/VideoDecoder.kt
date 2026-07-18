@@ -1,6 +1,6 @@
 // Adapted from headunit-revived (AGPLv3): decoder/VideoDecoder.kt
 // Trimmed to the H.264 (video/avc) hardware/software MediaCodec path only. HUR's H.265/HEVC,
-// bundled FFmpeg, software-YUV GL sink, and Settings dependencies are removed — OpenCFLink
+// bundled FFmpeg, software-YUV GL sink, and Settings dependencies are removed, OpenCFLink
 // requests only H.264 in service discovery and renders straight to a caller-supplied Surface
 // (the encoder input surface of VideoPipeline).
 package dev.snaipdefix.opencflink.aa
@@ -51,11 +51,11 @@ class VideoDecoder {
 
     @Volatile private var decoderNeedsRestart = false
     @Volatile private var decoderRestartReason: String? = null
-    /** When we last fed an input buffer — used to tell a real decoder stall (input flowing, no output)
-     *  from Android Auto simply pausing video (no input) during a UI transition or call. */
+    /** when we last fed an input buffer, used to tell a real decoder stall (input flowing, no output)
+     * from Android Auto simply pausing video (no input) during a UI transition or call. */
     @Volatile private var lastInputMs = 0L
 
-    /** Invoked when the decoder must be re-primed — the transport requests a fresh keyframe. */
+    /** Invoked when the decoder must be re-primed, the transport requests a fresh keyframe. */
     var onDecoderError: (() -> Unit)? = null
 
     val videoWidth: Int get() = mWidth
@@ -346,8 +346,8 @@ class VideoDecoder {
                     val stallGap = now - lastOutputMs
                     val inputGap = now - lastInputMs
                     // Real stall = we're actively feeding input but getting no output → restart.
-                    // If no input is arriving, Android Auto has just paused video (UI transition, call,
-                    // decoder recovery) — stay idle and let it resume; the compositor keep-alive holds
+                    // if no input is arriving, Android Auto has just paused video (UI transition, call,
+                    // decoder recovery), stay idle and let it resume; the compositor keep-alive holds
                     // the bike connection meanwhile. This avoids tearing down a healthy decoder and
                     // fighting AA's own Media Stop/Start sequence.
                     if (stallGap > 3000L && inputGap < 1000L) {

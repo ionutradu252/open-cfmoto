@@ -19,7 +19,7 @@ object BikeCreds {
             .apply()
     }
 
-    /** The saved bike as a minimal [QrData] (enough for profile selection + Wi-Fi join), or null. */
+    /** the saved bike as a minimal [QrData] (enough for profile selection + Wi-Fi join), or null. */
     fun load(context: Context): QrData? {
         val p = context.getSharedPreferences(PREF, Context.MODE_PRIVATE)
         val ssid = p.getString("ssid", null) ?: return null

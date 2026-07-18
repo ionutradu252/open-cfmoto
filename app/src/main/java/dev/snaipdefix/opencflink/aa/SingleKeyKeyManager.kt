@@ -1,5 +1,5 @@
 // Ported from headunit-revived (AGPLv3): ssl/SingleKeyKeyManager.kt
-// Presents the head-unit certificate + private key (res/raw/aa_cert, aa_privkey — the
+// Presents the head-unit certificate + private key (res/raw/aa_cert, aa_privkey, the
 // identity Google Android Auto accepts) to the AAP TLS handshake.
 package dev.snaipdefix.opencflink.aa
 

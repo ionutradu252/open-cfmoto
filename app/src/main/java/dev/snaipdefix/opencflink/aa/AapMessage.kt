@@ -83,7 +83,7 @@ open class AapMessage(
         private fun flags(channel: Int, type: Int): Byte {
             var flags: Byte = 0x0b
             if (channel != Channel.ID_CTR && MsgType.isControl(type)) {
-                // On non-control channels, indicates generic/"control type" messages.
+                // on non-control channels, indicates generic/"control type" messages.
                 flags = 0x0f
             }
             return flags

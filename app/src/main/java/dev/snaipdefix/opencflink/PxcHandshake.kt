@@ -26,8 +26,8 @@ class PxcHandshake(
     @Volatile var lastClientInfo: JSONObject? = null
         private set
     /** Dashboard-variant strategy, selected from the bike's CLIENT_INFO. Read by the media plane too
-     *  (via EasyConnProber.handshake.profile). Written once on the control thread, before any media
-     *  socket exists. */
+     * (via EasyConnProber.handshake.profile). Written once on the control thread, before any media
+     * socket exists. */
     @Volatile var profile: BikeProfile = BikeProfiles.legacy
         private set
 
@@ -54,7 +54,7 @@ class PxcHandshake(
             }
             PxcFrame.CMD_HEARTBEAT_ACK,
             PxcFrame.CMD_CHECK_SN_RESULT + 1 -> {
-                // acks from the bike — nothing to do
+                // acks from the bike, nothing to do
             }
             else -> {
                 if (!profile.handleUnknownControl(tag, frame, out, log)) {

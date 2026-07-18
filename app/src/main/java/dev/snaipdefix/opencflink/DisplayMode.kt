@@ -3,7 +3,7 @@ package dev.snaipdefix.opencflink
 import android.content.Context
 
 /**
- * How the Android Auto image is fitted to the bike panel, as a user override of the profile default:
+ * how the Android Auto image is fitted to the bike panel, as a user override of the profile default:
  *   fill      = cover the whole panel, cropping the overflow (no bars).
  *   letterbox = aspect-preserved, centered, black bars (nothing cropped).
  *
@@ -19,7 +19,7 @@ object DisplayMode {
     @Volatile var override: Boolean? = null
         private set
 
-    /** The fill setting the compositor should use right now. */
+    /** the fill setting the compositor should use right now. */
     fun effective(): Boolean = override ?: BikeProfileHolder.active.fillCanvas
 
     /** Load any saved override (called once at startup). */

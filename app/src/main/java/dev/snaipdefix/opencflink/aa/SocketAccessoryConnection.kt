@@ -1,6 +1,6 @@
 // Adapted from headunit-revived (AGPLv3): connection/SocketAccessoryConnection.kt
 // Trimmed to a pre-connected loopback socket (self-mode): no network binding, no outbound
-// connect() — Android Auto (gearhead) connects IN to our WirelessServer on 127.0.0.1:5288.
+// connect(), Android Auto (gearhead) connects IN to our WirelessServer on 127.0.0.1:5288.
 package dev.snaipdefix.opencflink.aa
 
 import java.io.DataInputStream

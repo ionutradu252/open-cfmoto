@@ -49,7 +49,7 @@
                         style="?attr/materialButtonOutlinedStyle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Scan bike QR" />
+                        android:text="Scan QR" />
 
                     <Space android:layout_width="8dp" android:layout_height="wrap_content" />
 
@@ -160,7 +160,7 @@
                 <TextView
                     style="@style/SettingsHint"
                     android:paddingTop="8dp"
-                    android:text="Type it here and Google Maps takes over — the route shows on the dash, no dash interaction needed." />
+                    android:text="The route shows up on the dash. Nothing to touch there." />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -217,7 +217,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="Mirror phone screen instead" />
+                    android:text="Mirror the phone screen instead" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

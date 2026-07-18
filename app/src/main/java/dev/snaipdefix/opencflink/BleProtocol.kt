@@ -64,7 +64,7 @@ object BleProtocol {
     /** Pull the bytes/string out of a single-field protobuf payload (field 1, wire type 2). */
     fun unwrapProtoBytes1(proto: ByteArray): ByteArray? {
         if (proto.isEmpty() || proto[0] != 0x0A.toByte()) return null
-        // Read varint length
+        // read varint length
         var idx = 1
         var len = 0
         var shift = 0
@@ -80,7 +80,7 @@ object BleProtocol {
         return proto.copyOfRange(idx, idx + len)
     }
 
-    /** Build a single-field protobuf payload: tag 0x0A + varint length + bytes. */
+    /** build a single-field protobuf payload: tag 0x0A + varint length + bytes. */
     private fun wrapProtoBytes1(data: ByteArray): ByteArray {
         val lenVarint = encodeVarint(data.size)
         val out = ByteArray(1 + lenVarint.size + data.size)

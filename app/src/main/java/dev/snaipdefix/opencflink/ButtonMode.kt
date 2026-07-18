@@ -3,14 +3,10 @@ package dev.snaipdefix.opencflink
 import android.content.Context
 
 /**
- * What the bike's Bluetooth media buttons (track/play-pause) should do:
- *   false (default) = control MEDIA — buttons skip tracks / pause music as normal.
- *   true            = control ANDROID AUTO — [MediaButtonBridge] grabs the media session and remaps
- *                     the buttons to AA D-pad navigation (music keeps playing, but the buttons no
- *                     longer skip tracks while this is on).
- *
- * Volume buttons are a separate system path and are unaffected either way. Persisted so the choice
- * survives restarts.
+ * what the bike's media buttons do:
+ *   false (default) = normal media, they skip tracks / pause music
+ *   true = drive android auto. MediaButtonBridge takes the media session and remaps them, so your
+ *   music player pauses for as long as it's on.
  */
 object ButtonMode {
     private const val PREF = "button_mode"

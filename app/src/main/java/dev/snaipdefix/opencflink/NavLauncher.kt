@@ -6,27 +6,26 @@ import android.net.Uri
 import android.provider.Settings
 
 /**
- * Start Google Maps turn-by-turn to a destination. With Android Auto projecting, the route appears
- * on the dash — no interaction with the (touchless) dash needed.
+ * start google maps turn-by-turn. with AA projecting the route shows up on the dash.
  *
- * Shared by the "Navigate to…" box and by the handlebar [ButtonAction.NAV_1]/`2`/`3` actions. The
- * handlebar case starts an Activity while the app is in the background, which Android blocks by
- * default since 10 — see [canLaunchFromBackground].
+ * used by the "navigate to..." box and by the handlebar nav actions. the handlebar case starts an
+ * activity while the app is in the background, which android blocks by default, see
+ * canLaunchFromBackground.
  */
 object NavLauncher {
 
     /**
-     * Whether a nav action fired from the handlebars can actually start Maps.
+     * can a nav action from the handlebars actually start maps?
      *
-     * Android blocks background activity starts, and a foreground service does NOT exempt us — so
-     * while you're riding, with our UI off screen, `startActivity` would be swallowed silently
-     * (no exception, nothing happens, hence nothing to see in a log). "Display over other apps"
-     * (SYSTEM_ALERT_WINDOW) is the one grant that lifts it, so it's a real requirement for the nav
-     * buttons rather than a nicety. The in-app "Navigate to…" box doesn't need it: we're on screen.
+     * android blocks background activity starts and a foreground service does not exempt us, so
+     * while riding with the ui off screen startActivity is swallowed silently, no exception,
+     * nothing happens, nothing in the log. "display over other apps" is the one grant that lifts it,
+     * so it's a real requirement for the nav buttons. the in-app box doesn't need it, we're on
+     * screen.
      */
     fun canLaunchFromBackground(context: Context): Boolean = Settings.canDrawOverlays(context)
 
-    /** @return true if we handed the destination to a nav app. */
+    /** true if we handed the destination to a nav app */
     fun navigate(context: Context, destination: String, log: (String) -> Unit): Boolean {
         val dest = destination.trim()
         if (dest.isEmpty()) {
@@ -34,12 +33,11 @@ object NavLauncher {
             return false
         }
         if (!canLaunchFromBackground(context)) {
-            // Log it rather than failing quietly: a silent no-op here is otherwise impossible to
-            // diagnose from a ride log.
+            // log it, a silent no-op here is impossible to diagnose from a ride log
             log("[NAV] warning: \"Display over other apps\" is off — Android may block this launch")
         }
         val uri = Uri.parse("google.navigation:q=" + Uri.encode(dest))
-        // Prefer Google Maps explicitly; fall back to any nav-capable app.
+        // prefer google maps, fall back to anything that can navigate
         val intents = listOf(
             Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps"),
             Intent(Intent.ACTION_VIEW, uri),
@@ -56,7 +54,7 @@ object NavLauncher {
         return false
     }
 
-    /** Send the user to the system page where "Display over other apps" can be granted. */
+    /** system page where "display over other apps" is granted */
     fun overlayPermissionIntent(context: Context) =
         Intent(
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

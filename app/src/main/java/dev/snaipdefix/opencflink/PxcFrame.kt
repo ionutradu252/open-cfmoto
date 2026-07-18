@@ -67,12 +67,12 @@ data class PxcFrame(val cmd: Int, val payload: ByteArray) {
         const val CMD_CHECK_SN            = 0x103e0    // bike→phone {client_set,sn}; reply 0x103e1 + result
         const val CMD_CHECK_SN_ACK        = 0x103e1
         const val CMD_CHECK_SN_RESULT     = 0x201c0    // phone→bike {isOk,...}; bike acks 0x201c1
-        // BIKE B (CFDL26 / MotoPlay) log/report frame — bike→phone JSON {"log":...} after CAR_DATA
-        // select. The older CFDL16 unit never sends this. Ack (0x10781) is experimental — the CFDL26
+        // BIKE B (CFDL26 / MotoPlay) log/report frame, bike→phone JSON {"log":...} after CAR_DATA
+        // select. The older CFDL16 unit never sends this. Ack (0x10781) is experimental, the CFDL26
         // unit stalls (never opens the media ports) when we leave it unanswered. See Cfdl26Profile.
         const val CMD_LOG_REPORT          = 0x10780
         const val CMD_LOG_REPORT_ACK      = 0x10781
-        // More CFDL26 post-CHECK_SN notify frames (bike→phone JSON), each expecting a cmd+1 empty ack:
+        // more CFDL26 post-CHECK_SN notify frames (bike→phone JSON), each expecting a cmd+1 empty ack:
         const val CMD_OTA_FTP_INFO        = 0x103a0   // {port,userName,pwd} for the FTP OTA server
         const val CMD_MEDIA_FEATURE_CFG   = 0x10020   // {music,talkie,tts,vr,autoChangeToBT} feature flags
 
@@ -114,7 +114,7 @@ data class PxcFrame(val cmd: Int, val payload: ByteArray) {
             else                       -> "?"
         }
 
-        /** Reads exactly len bytes or returns false (no data). */
+        /** reads exactly len bytes or returns false (no data). */
         fun readFully(input: InputStream, buf: ByteArray, len: Int): Boolean {
             var read = 0
             while (read < len) {
@@ -125,7 +125,7 @@ data class PxcFrame(val cmd: Int, val payload: ByteArray) {
             return true
         }
 
-        /** Reads one CmdBaseHead frame from the stream. Returns null on EOF or bad header. */
+        /** reads one CmdBaseHead frame from the stream. Returns null on EOF or bad header. */
         fun read(input: InputStream): PxcFrame? {
             val header = ByteArray(16)
             if (!readFully(input, header, 16)) return null

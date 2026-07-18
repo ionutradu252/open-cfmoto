@@ -1,13 +1,17 @@
 package dev.snaipdefix.opencflink
 
 /**
- * Process-wide, lightweight live status for the on-screen status row. Components update these
- * volatiles as things happen; MainActivity polls them ~once a second to render a glanceable line
- * (no need to read the log). Kept dead simple on purpose — best-effort, not a source of truth.
+ * live status for the header row. components set these as things happen, MainActivity reads them
+ * once a second. best effort, not a source of truth.
  */
 object AppStatus {
-    /** Android Auto decode frame rate (set by AaReceiver.onFpsChanged). */
+    /** AA decode frame rate, set by AaReceiver.onFpsChanged */
     @Volatile var aaFps = 0
-    /** True while an Android Auto session is connected (handshake done → transport quit). */
+    /** true while an AA session is up (handshake done until transport quit) */
     @Volatile var aaConnected = false
+    /** bike wifi frequency in mhz, 0 if unknown. 2.4ghz means the video shares the band with the
+     * helmet's bluetooth, first thing to check on an audio complaint. */
+    @Volatile var wifiMhz = 0
+    /** capture size the dash last asked for, e.g. "800x400" */
+    @Volatile var panelRequested: String? = null
 }

@@ -3,7 +3,7 @@ package dev.snaipdefix.opencflink
 import android.net.Uri
 
 /**
- * Mirrors net.easyconn.carman.common.base.QrResult.parseResult — the bike's QR is a URL
+ * Mirrors net.easyconn.carman.common.base.QrResult.parseResult, the bike's QR is a URL
  * whose query string carries the connection params:
  *
  *   http://www.carbit.com.cn/...?modelid=...&sn=...&action=9

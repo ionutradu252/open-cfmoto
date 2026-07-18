@@ -84,7 +84,7 @@ class AndroidAutoService : Service() {
         try {
             // Compositor mode: the AA decoder renders into the compositor's input surface; the
             // compositor letterboxes it into the bike's canvas (encoder created later, sized to the
-            // bike's REQ_CONFIG_CAPTURE dims — see EasyConnProber / VideoPipeline.configureBikeCanvas).
+            // bike's REQ_CONFIG_CAPTURE dims, see EasyConnProber / VideoPipeline.configureBikeCanvas).
             val vp = VideoPipeline(applicationContext, 0, 0, LogBus::log, compositor = true)
             vp.start()
             val surface = vp.decoderInputSurface()

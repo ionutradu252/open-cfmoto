@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Every tweakable, with the reason for it underneath. Each control writes straight through to its
-     persisted store and applies to the running session where that's possible. -->
+<!-- one line of explanation per control. the long "why" lives in the code comments. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
@@ -16,117 +15,129 @@
         android:paddingTop="4dp"
         android:paddingBottom="24dp">
 
-        <!-- ── Display ── -->
-        <TextView style="@style/SettingsSection" android:text="DISPLAY" />
+        <!-- ── screen ── -->
+        <TextView style="@style/SettingsSection" android:text="SCREEN" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_fill_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:text="Fill the whole screen"
-            android:textSize="15sp" />
+            style="@style/SettingRow"
+            android:text="Fill the whole screen" />
 
         <TextView
             style="@style/SettingsHint"
-            android:text="Crops a little top and bottom to use every pixel of the dash. Off = letterbox, whole picture with black bars." />
+            android:text="Off = letterbox, with black bars." />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_night_mode"
+            style="@style/SettingButton"
+            android:text="Day / night" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Dark theme on the dash after sunset." />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_video_quality"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="Picture quality…" />
+            style="@style/SettingButton"
+            android:text="Picture quality" />
 
         <TextView
-            android:id="@+id/tv_video_quality"
             style="@style/SettingsHint"
-            android:paddingTop="6dp"
-            android:text="If the dash's Wi-Fi is on 2.4 GHz it shares the band with your helmet's Bluetooth, so a busy map can stutter your music — the faster you ride, the more the map moves. Turn this down to give the audio room. Applies on the next connect." />
+            android:text="Turn it down if your music stutters while riding. Applies on the next connect." />
 
-        <!-- ── Controls ── -->
-        <TextView style="@style/SettingsSection" android:text="HANDLEBAR BUTTONS" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_align"
+            style="@style/SettingButton"
+            android:text="Picture alignment" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Leave centred unless part of the picture is missing at one edge." />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_margins"
+            style="@style/SettingButton"
+            android:text="Screen margins" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Keep Android Auto clear of an edge, e.g. the 800NK's pull-down arrow at the top." />
+
+        <!-- ── buttons ── -->
+        <TextView style="@style/SettingsSection" android:text="BUTTONS" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_button_mode"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:text="Bike buttons drive Android Auto"
-            android:textSize="15sp" />
+            style="@style/SettingRow"
+            android:text="Bike buttons drive Android Auto" />
 
         <TextView
             style="@style/SettingsHint"
-            android:text="Volume ▲▼ becomes the knob, enter becomes OK, double ▼▼ = Back, double ▲▲ = Home — all of it remappable below.\n\nCost: Android hands the media buttons to one app at a time, so while this is on your music player pauses and the buttons stop skipping tracks. Turn it off to get normal music control back." />
+            android:text="Your music player pauses while this is on. Android gives the buttons to one app at a time." />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_button_mapping"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Customize buttons…" />
-
-        <!-- ── Audio ── -->
-        <TextView style="@style/SettingsSection" android:text="AUDIO" />
-
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/sw_aa_audio"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:enabled="false"
-            android:text="Android Auto audio through the bike"
-            android:textSize="15sp" />
+            style="@style/SettingButton"
+            android:text="Customize buttons" />
 
         <TextView
             style="@style/SettingsHint"
-            android:text="Not built yet — the switch is here for when it is. Today Android Auto's audio (nav voice, media) plays from the phone straight to your helmet over Bluetooth, which is why sound already works." />
+            android:text="Choose what each button does." />
 
-        <!-- ── Connection ── -->
+        <!-- ── sound ── -->
+        <TextView style="@style/SettingsSection" android:text="SOUND" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/sw_aa_audio"
+            style="@style/SettingRow"
+            android:enabled="false"
+            android:text="Android Auto audio through the bike" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Not built yet. Sound already reaches your helmet from the phone over Bluetooth." />
+
+        <!-- ── connection ── -->
         <TextView style="@style/SettingsSection" android:text="CONNECTION" />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_auto_connect"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:text="Connect when the app opens"
-            android:textSize="15sp" />
+            style="@style/SettingRow"
+            android:text="Connect when the app opens" />
 
         <TextView
             style="@style/SettingsHint"
-            android:text="Starts Android Auto straight away using the saved bike — no QR, no button." />
+            android:text="No QR, no button. Just open it." />
 
         <com.google.android.material.materialswitch.MaterialSwitch
             android:id="@+id/sw_reconnect"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginTop="6dp"
-            android:text="Rejoin after an ignition cycle"
-            android:textSize="15sp" />
+            style="@style/SettingRow"
+            android:text="Rejoin after an ignition cycle" />
 
         <TextView
             style="@style/SettingsHint"
-            android:text="Kill the ignition and the bike's Wi-Fi vanishes. This waits for it to come back and rejoins by itself instead of you having to Stop and Start. It backs off between tries and gives up after a while, so it isn't sitting there burning battery." />
+            android:text="Waits for the bike to come back, then gives up after 2 minutes." />
 
-        <!-- ── Advanced ── -->
+        <!-- ── advanced ── -->
         <TextView style="@style/SettingsSection" android:text="ADVANCED" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_aa_settings"
-            style="?attr/materialButtonOutlinedStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            style="@style/SettingButton"
             android:text="Open Android Auto settings" />
 
         <TextView
             style="@style/SettingsHint"
-            android:paddingTop="6dp"
-            android:text="Android Auto must have &quot;Add new cars to Android Auto&quot; enabled, and developer mode helps if the dash stays black." />
+            android:text="Needs “Add new cars to Android Auto” turned on." />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_check_updates"
+            style="@style/SettingButton"
+            android:text="Check for updates" />
+
+        <TextView
+            style="@style/SettingsHint"
+            android:text="Looks on GitHub. Won't work while connected — the bike's Wi-Fi has no internet." />
 
         <TextView
             android:id="@+id/tv_profile_info"

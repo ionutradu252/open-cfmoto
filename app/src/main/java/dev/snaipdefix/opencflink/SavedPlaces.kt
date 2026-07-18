@@ -3,10 +3,8 @@ package dev.snaipdefix.opencflink
 import android.content.Context
 
 /**
- * Destinations you can start turn-by-turn to from a handlebar button, without touching the phone.
- *
- * Three slots, each a name ("Home") and whatever Google Maps accepts as a query (an address, a
- * place name, or `lat,lng`). Mapped to a gesture via [ButtonAction.NAV_1]/`NAV_2`/`NAV_3`.
+ * places you can navigate to from a handlebar button without touching the phone. three slots, each
+ * a name ("home") and whatever maps accepts as a query, address, place name, or lat,lng.
  */
 object SavedPlaces {
     const val COUNT = 3
@@ -27,11 +25,11 @@ object SavedPlaces {
 
     fun isSet(context: Context, slot: Int): Boolean = query(context, slot).isNotBlank()
 
-    /** How this slot reads in the action picker — its own name once there is one. */
+    /** how the slot reads in the action picker */
     fun actionLabel(context: Context, slot: Int): String {
-        if (!isSet(context, slot)) return "Navigate to saved place ${slot + 1} (not set yet)"
+        if (!isSet(context, slot)) return "Navigate to place ${slot + 1} (empty)"
         val n = name(context, slot)
-        return "Navigate: ${n.ifBlank { query(context, slot) }}"
+        return "Navigate to ${n.ifBlank { query(context, slot) }}"
     }
 
     private fun prefs(context: Context) =

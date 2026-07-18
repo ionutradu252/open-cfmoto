@@ -13,12 +13,12 @@ import javax.crypto.Cipher
 /**
  * Mirrors net.easyconn.carman.utils.RSAUtil.
  *
- * The Carbit SDK generates a 1024-bit RSA keypair locally on first run.
+ * the Carbit SDK generates a 1024-bit RSA keypair locally on first run.
  *   - The bike encrypts a HUID with our public key  → we decrypt with private key (decryptByPrivateKey)
  *   - The bike sends `huid` cleartext in CLIENT_INFO → we sign by encrypting with the private key
  *     (encryptHUID), bike verifies with our public key.
  *
- * Single in-memory keypair for the session — that's enough for a PoC.
+ * Single in-memory keypair for the session, that's enough for a PoC.
  */
 object RsaKeys {
     private val keypair: KeyPair = KeyPairGenerator.getInstance("RSA")
@@ -31,7 +31,7 @@ object RsaKeys {
     /** Base64-encoded X.509 public key (same format the SDK puts in CLIENT_INFO.pubkey). */
     val publicKeyBase64: String = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
 
-    /** "Encrypt" HUID with private key (= signing) — the bike will decrypt with our pubkey. */
+    /** "Encrypt" HUID with private key (= signing), the bike will decrypt with our pubkey. */
     fun signHuid(huid: String): String {
         val priv = KeyFactory.getInstance("RSA")
             .generatePrivate(PKCS8EncodedKeySpec(privateKey.encoded))

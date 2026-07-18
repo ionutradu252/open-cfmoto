@@ -26,11 +26,11 @@ import kotlin.concurrent.thread
  *        ▼
  *   MediaCodec (video/avc, 800x384)  ──encoded access units──▶  frameQueue
  *
- * The data socket pulls one frame per REQ_RV_DATA_NEXT(114) via [pollFrame].
+ * the data socket pulls one frame per REQ_RV_DATA_NEXT(114) via [pollFrame].
  * Frames are Annex-B; SPS/PPS (codec config) is prepended to the first keyframe so the
  * decoder on the bike can start.
  *
- * No MediaProjection needed: we render our OWN content onto a private VirtualDisplay
+ * no MediaProjection needed: we render our OWN content onto a private VirtualDisplay
  * (the same approach as MotoPlay's SplitScreenPresentation).
  */
 class VideoPipeline(
@@ -39,13 +39,13 @@ class VideoPipeline(
     private val height: Int,
     private val log: (String) -> Unit,
     /**
-     * When true, the pipeline only runs the H.264 encoder and exposes [encoderInputSurface] for
+     * when true, the pipeline only runs the H.264 encoder and exposes [encoderInputSurface] for
      * an EXTERNAL producer (the Android Auto video decoder) to render into. No Presentation /
      * MediaProjection source is created. See [encoderInputSurface] and AaVideoBridge.
      */
     private val externalSource: Boolean = false,
     /**
-     * When true, an [AaCompositor] sits between the AA decoder and the encoder: the decoder renders
+     * when true, an [AaCompositor] sits between the AA decoder and the encoder: the decoder renders
      * into [decoderInputSurface] and the compositor letterboxes it (aspect-preserved) into the
      * encoder canvas. The encoder is created lazily in [configureBikeCanvas] once the bike reports
      * its canvas size (so the encoder matches the bike, not a hardcoded resolution).
@@ -65,12 +65,12 @@ class VideoPipeline(
 
     private val frameQueue = LinkedBlockingDeque<ByteArray>(8)
     @Volatile private var codecConfig: ByteArray? = null   // SPS/PPS
-    // When set, the drain loop discards encoder output until the next keyframe, so the first frame a
+    // when set, the drain loop discards encoder output until the next keyframe, so the first frame a
     // freshly-attached bike client receives is a full SPS+PPS+IDR. See onBikeDataStart().
     @Volatile private var awaitKeyframe = false
     private var resyncs = 0   // count of "bike behind" resyncs (drain thread only)
 
-    // Diagnostic: dump the exact Annex-B H.264 access units we send to the bike into a .h264 file so
+    // diagnostic: dump the exact Annex-B H.264 access units we send to the bike into a .h264 file so
     // the stream can be inspected off-device (ffprobe/ffmpeg). Bounded to DUMP_CAP frames so it never
     // grows unbounded or stalls the send path for long. Filename is tagged by source (aa/mirror/own)
     // so an AA capture and a mirror capture can be compared directly. See docs/05-DEBUG-KNOWLEDGE.md.
@@ -86,7 +86,12 @@ class VideoPipeline(
             // Android Auto (letterbox) mode: bring up the compositor now so the AA decoder has an
             // input surface and can reach steady video; the encoder is created later, once the bike
             // tells us its canvas size (see [configureBikeCanvas]).
-            aaCompositor = AaCompositor(log).also { it.start() }
+            aaCompositor = AaCompositor(log).also {
+                // coming back from the idle throttle the dash's decoder is minutes behind, so give
+                // it a fresh idr instead of a p-frame chain off a reference it no longer has
+                it.onResumeFromIdle = { requestSyncFrameNow() }
+                it.start()
+            }
             log("[VIDEO] COMPOSITOR mode — decoder input ready; awaiting bike canvas")
             return
         }
@@ -110,26 +115,23 @@ class VideoPipeline(
         }
     }
 
-    /** Create + start the H.264 encoder at [w]x[h] and its drain thread. Returns false on failure. */
+    /** create + start the H.264 encoder at [w]x[h] and its drain thread. Returns false on failure. */
     private fun createEncoder(w: Int, h: Int): Boolean {
         try {
             val quality = VideoQuality.get(context)
             log("[VIDEO] quality=${quality.label} (${quality.bitrate / 1000}kbps), keyframes every ${I_FRAME_INTERVAL_S}s")
             fun baseFormat() = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-                // Fewer bits here = more 2.4 GHz airtime for the Bluetooth audio. See [VideoQuality].
+                // fewer bits here = more 2.4ghz airtime for the bluetooth audio, see VideoQuality
                 setInteger(MediaFormat.KEY_BIT_RATE, quality.bitrate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, 30)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL_S)
-                // Surface-input encoders only emit on new buffers; a STATIC screen (e.g. mirror of
-                // an idle app) then produces zero frames and the bike times out. Repeat the last
-                // frame if nothing new arrives so output is continuous even when the screen is still.
+                // surface-input encoders only emit on new buffers, so a static screen produces no
+                // frames at all and the bike times out. repeat the last frame if nothing new comes.
                 setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000L) // 100ms → ≥10fps floor
-                // Force strictly-ascending output with no B-frame reordering: the bike wire format
-                // sends raw access units with NO timestamps, so a decoder that received reordered
-                // (B-)frames could never reassemble display order → black/garbage. Baseline already
-                // forbids B-frames; this also covers the Main/High fallback path. Hint only — encoders
-                // that don't support it ignore it.
+                // no b-frame reordering: the bike wire format has no timestamps, so a decoder that
+                // got reordered frames could never put them back in order = black/garbage. baseline
+                // already forbids b-frames, this covers the main/high fallback too. hint only.
                 setInteger(MediaFormat.KEY_LATENCY, 1)
             }
             val c = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -183,8 +185,8 @@ class VideoPipeline(
         val surf = inputSurface
         if (surf != null) {
             aaCompositor?.setOutput(surf, w, h, src.width, src.height)
-            // Say which mode is actually in effect — this used to always claim "letterboxed", which
-            // contradicted the [COMPOSITOR] line right underneath it whenever fill was on.
+            // say which mode is actually on. this used to always say "letterboxed", contradicting
+            // the [COMPOSITOR] line right under it whenever fill was in use.
             log("[VIDEO] bike canvas ${w}x$h configured; AA source ${src.width}x${src.height} → " +
                 if (DisplayMode.effective()) "fill" else "letterbox")
         }
@@ -276,7 +278,7 @@ class VideoPipeline(
                 } else {
                     val isKey = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
                     if (awaitKeyframe && !isKey) {
-                        // A bike client just attached but this is a P-frame — it references frames the
+                        // A bike client just attached but this is a P-frame, it references frames the
                         // client never received, so serving it would leave the dash decoder uninitialised
                         // (black). Drop until the next keyframe. (Buffer still released below.)
                     } else {
@@ -307,38 +309,53 @@ class VideoPipeline(
     }
 
     /**
-     * The encoder's input Surface. In [externalSource] mode the Android Auto video decoder is
+     * the encoder's input Surface. In [externalSource] mode the Android Auto video decoder is
      * pointed at this surface (`VideoDecoder.setSurface`), so decoded AA frames are re-encoded to
      * the bike's 800x384 H.264 and pulled by the PXC data socket via [pollFrame]. Valid only
      * after [start].
      */
     fun encoderInputSurface(): android.view.Surface? = inputSurface
 
-    /** Compositor mode: the surface the AA decoder renders into (letterboxed before the encoder). */
+    /** the surface the AA decoder renders into, before the compositor */
     fun decoderInputSurface(): android.view.Surface? = aaCompositor?.inputSurface
 
-    /** Re-apply the fill/letterbox display mode live (from the in-app toggle). */
+    /** re-apply the fill/letterbox mode live, from the in-app toggle */
     fun refreshDisplayMode() { aaCompositor?.refreshViewport() }
 
-    /** Compositor mode: map a bike-canvas touch point to Android Auto source coords (letterbox-aware);
-     *  null if the point is in a black bar. See AaCompositor.mapCanvasToSource. */
-    fun mapBikeTouchToSource(cx: Int, cy: Int): Pair<Int, Int>? = aaCompositor?.mapCanvasToSource(cx, cy)
+    /** map a bike-canvas touch to AA touchscreen coords (the ui area inside the margins),
+     * null if it's in a black bar or the margin band */
+    fun mapBikeTouchToSource(cx: Int, cy: Int): Pair<Int, Int>? = aaCompositor?.mapCanvasToUi(cx, cy)
 
-    /** Called by the data socket on each REQ_RV_DATA_NEXT(114). Returns one access unit. */
-    fun pollFrame(timeoutMs: Long): ByteArray? =
-        try { frameQueue.pollFirst(timeoutMs, TimeUnit.MILLISECONDS) } catch (e: InterruptedException) { null }
+    /** attach/detach the in-app dash view; null detaches. see AaCompositor.setPreview */
+    fun setDashPreview(surface: android.view.Surface?, w: Int, h: Int) {
+        aaCompositor?.setPreview(surface, w, h)
+    }
+
+    /** the bike canvas size, so the in-app view can match its aspect and scale touches back */
+    fun bikeCanvasSize(): Pair<Int, Int>? = aaCompositor?.canvasSize()
 
     /**
-     * A bike video client is (re)attaching and about to pull frames (REQ_RV_DATA_START). Guarantee the
-     * FIRST access unit it receives is a full keyframe (SPS+PPS+IDR):
-     *  1. flush stale frames already in the queue (they may be mid-GOP P-frames),
-     *  2. drop further encoder output until the next keyframe (awaitKeyframe), and
-     *  3. ask the encoder for an immediate sync frame so that keyframe arrives right away.
+     * called by the data socket on each REQ_RV_DATA_NEXT(114), returns one access unit.
      *
-     * Without this, Android Auto mode is black: its encoder is created at REQ_CONFIG_CAPTURE — up to a
-     * second before the bike opens the data socket — so the initial IDR is long evicted from the small
-     * queue and the bike starts on a P-frame with no SPS/PPS, leaving the dash decoder uninitialised.
-     * (Mirror mode avoided this only by creating its encoder lazily right as the bike attaches.)
+     * also the dash's pulse: it's the only thing that tells us the dash is still showing the
+     * projection. with the gauges screen up the socket stays open but the pulls stop. see
+     * AaCompositor.noteBikePull.
+     */
+    fun pollFrame(timeoutMs: Long): ByteArray? {
+        aaCompositor?.noteBikePull()
+        return try { frameQueue.pollFirst(timeoutMs, TimeUnit.MILLISECONDS) } catch (e: InterruptedException) { null }
+    }
+
+    /**
+     * a bike video client is attaching and about to pull (REQ_RV_DATA_START). make sure the first
+     * thing it gets is a full keyframe (sps+pps+idr):
+     * 1. flush stale frames from the queue, they may be mid-gop p-frames
+     * 2. drop encoder output until the next keyframe (awaitKeyframe)
+     * 3. ask the encoder for a sync frame so that keyframe comes now
+     *
+     * without this AA mode is black: the encoder is created at REQ_CONFIG_CAPTURE, up to a second
+     * before the bike opens the data socket, so the first idr is long gone from the small queue and
+     * the bike starts on a p-frame with no sps/pps and never initialises its decoder.
      */
     fun onBikeDataStart() {
         frameQueue.clear()
@@ -426,24 +443,22 @@ class VideoPipeline(
 
     companion object {
         /**
-         * Seconds between automatic keyframes.
+         * seconds between automatic keyframes.
          *
-         * Was 1 — a full IDR every single second, "for late joiners". On the 2026-07-16 ride an IDR
-         * measured ~20 KB against ~500 B for a P-frame, so periodic keyframes alone were roughly a
-         * quarter of everything we put on the air, in bursts big enough to elbow the helmet's
-         * Bluetooth audio out of the way.
+         * was 1, i.e. a full idr every second "for late joiners". on the 2026-07-16 ride an idr was
+         * ~20kb against ~500b for a p-frame, so periodic keyframes alone were about a quarter of
+         * everything we put on the air, in bursts big enough to push the helmet's bluetooth out of
+         * the way.
          *
-         * They were also redundant. The media plane is TCP, so frames don't arrive corrupted — they
-         * arrive late. The only two moments a keyframe is genuinely needed are a bike attaching and
-         * a resync after we drop a backlog, and both explicitly call requestSyncFrameNow(). So this
-         * can be long without risking the green flashing that periodic IDRs were papering over.
+         * they were also redundant: the media plane is tcp, so frames arrive late, not corrupt. the
+         * only two moments that really need a keyframe are a bike attaching and a resync after we
+         * drop a backlog, and both call requestSyncFrameNow() anyway.
          */
         const val I_FRAME_INTERVAL_S = 5
 
-        /** Diagnostic build flag: dump the H.264 we send to the bike (bounded). Turn on to capture a
-         *  .h264 of the exact wire stream for offline ffprobe analysis; off for normal use. */
+        /** dump the h264 we send to the bike, for offline ffprobe. off for normal use. */
         const val DUMP_H264 = false
-        /** How many access units to capture before auto-stopping the dump (~20s at 30fps). */
+        /** how many frames to dump before stopping (~20s at 30fps) */
         const val DUMP_CAP = 600
     }
 }

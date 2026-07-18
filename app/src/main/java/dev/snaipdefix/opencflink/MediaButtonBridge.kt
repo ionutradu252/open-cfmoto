@@ -20,20 +20,22 @@ import android.view.KeyEvent
 import dev.snaipdefix.opencflink.aa.AaInput
 
 /**
- * Turns the bike's handlebar buttons into Android Auto navigation.
+ * turns the handlebar buttons into android auto navigation.
  *
- * The buttons never reach us over the PXC/Wi-Fi link (input capture on :10920-:10922 saw nothing).
- * What DOES work, verified on the bike:
- *   • short press ▲/▼ → AVRCP **absolute volume** → we read the DIRECTION as a knob click.
- *   • hold enter → AVRCP PLAY/PAUSE passthrough → mapped to ENTER (select).
- * The dash only emits the transport keys once we look like a real player, which is why this class
- * takes audio focus, plays a silent track, publishes metadata and posts a MediaStyle notification.
+ * the buttons never come over the pxc link (input capture on :10920-:10922 saw nothing). what does
+ * work, from bike tests:
+ *   450SR: short press up/down = avrcp absolute volume, we read the direction as a knob click.
+ *          hold enter = avrcp play/pause = select.
+ *   800NK: left/right = next/prev track keys, star = play/pause. it sends no volume at all.
  *
- * Volume is watched with a [ContentObserver] rather than a remote-volume `VolumeProvider`: the bike
- * sends absolute volume, so there is no volume KEY event to intercept — the provider never fired,
- * and it added a confusing second volume slider on the phone, so it's gone.
+ * the dash only sends the transport keys once we look like a real player, hence the audio focus,
+ * the silent track, the metadata and the notification.
  *
- * All of it is gated on [ButtonMode] — toggle off and volume/media behave completely normally.
+ * volume is watched with a ContentObserver, not a VolumeProvider: the bike sends absolute volume so
+ * there's no volume key event to intercept. the provider never fired and added a second volume
+ * slider on the phone, so it's gone.
+ *
+ * all gated on ButtonMode, toggle off and everything behaves normally again.
  */
 class MediaButtonBridge(private val context: Context, private val log: (String) -> Unit) {
 
@@ -48,13 +50,15 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     private var volumeObserver: ContentObserver? = null
-    /** Volume we hold the stream at while capturing, so there's always headroom up AND down. */
+    /** volume we hold the stream at while capturing, so there's headroom both ways */
     private var pinnedVolume = -1
-    /** One-shot guard: the dash only needs re-reading once per session. See [reassert]. */
+    /** last press per double-tappable key, see pressedWithDouble */
+    private val lastPressMs = HashMap<ButtonGesture, Long>()
+    /** the dash only needs re-reading once per session, see reassert */
     private var reasserted = false
-    /** Set by [stop]. Nothing posted to [handler] may touch audio focus after this. */
+    /** set by stop(). nothing on the handler may touch audio focus after this. */
     @Volatile private var released = false
-    /** The user's own volume, restored when capture is turned off. */
+    /** the user's own volume, put back when capture goes off */
     private var userVolume = -1
     private var focusRequest: AudioFocusRequest? = null
     private var silence: AudioTrack? = null
@@ -68,7 +72,7 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
                     PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or
                     PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_FAST_FORWARD or
                     PlaybackState.ACTION_REWIND
-                // An active PLAYING session is what makes the system route media buttons to us.
+                // an active PLAYING session is what makes android route media buttons to us
                 s.setPlaybackState(
                     PlaybackState.Builder().setActions(actions)
                         .setState(PlaybackState.STATE_PLAYING, 0, 1f).build()
@@ -90,17 +94,15 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Re-announce ourselves to the dash once the bike is actually connected.
+     * re-announce ourselves once the bike is actually connected.
      *
-     * We take media focus the moment the service starts — which is ~8 s BEFORE the bike's PXC link
-     * comes up (2026-07-16 log: focus at :36.269, bike at :44.674). The dash reads the player's
-     * capabilities when its AVRCP link forms, so it can read them before we've published anything,
-     * and then never re-reads: the symptom is next/prev/pause doing nothing all session. Toggling the
-     * setting off and on by hand fixed it — because that abandons and re-takes focus, forcing a
-     * re-read. This does that same thing automatically, at the right moment.
+     * we take media focus when the service starts, ~8s before the pxc link comes up (2026-07-16 log:
+     * focus at :36.269, bike at :44.674). the dash reads the player's capabilities when its avrcp
+     * link forms and never re-reads, so it can read them before we've published anything, symptom
+     * is next/prev/pause doing nothing all session. toggling the setting off and on by hand fixed it
+     * because that drops and re-takes focus. this does the same thing at the right moment.
      *
-     * Only while capture is on, i.e. when the music player is paused anyway, so the brief focus drop
-     * costs nothing.
+     * only while capture is on, so the music player is already paused and the focus drop is free.
      */
     private fun scheduleReassertWhenBikeUp() {
         if (reasserted || released) return
@@ -144,11 +146,11 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Live toggle: grab (true) or release (false) the bike's buttons.
+     * grab (true) or release (false) the bike's buttons, live.
      *
-     * Grabbing means genuinely becoming the phone's active media app — see [takeMediaFocus]. Android
-     * hands the media buttons to exactly ONE app, so this necessarily takes them off the music player
-     * (and pauses it) for as long as it's on.
+     * grabbing means becoming the phone's active media app (see takeMediaFocus). android gives the
+     * media buttons to exactly one app, so this takes them off your music player and pauses it for
+     * as long as it's on.
      */
     fun setCaptureActive(on: Boolean) {
         handler.post {
@@ -164,15 +166,14 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Become the phone's active media app, so the bike's buttons come to US.
+     * become the phone's active media app so the buttons come to us.
      *
-     * THE BUG THIS FIXES: media buttons go to exactly one app — the one Android considers the active
-     * media session, ranked by who actually holds audio focus and is playing. Merely declaring
-     * STATE_PLAYING (what we did before) loses to any real music player, so holding a handlebar
-     * button skipped the user's track and we never saw the event; with music paused, the player still
-     * owned the session, so nothing happened at all. Winning requires two things a real player has:
-     *   1. audio focus (AUDIOFOCUS_GAIN — this is what pauses the music player), and
-     *   2. actual playback — hence a looping silent track, so we rank as genuinely playing.
+     * media buttons go to one app: whichever android thinks is the active media session, ranked by
+     * who holds audio focus and is actually playing. just declaring STATE_PLAYING (what we did at
+     * first) loses to any real music player, holding a handlebar button skipped the user's track
+     * and we never saw it. winning needs the two things a real player has:
+     *   1. audio focus (AUDIOFOCUS_GAIN, this is what pauses the music player)
+     *   2. actual playback, hence the looping silent track
      */
     private fun takeMediaFocus() {
         try {
@@ -188,7 +189,7 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         }
         startSilence()
         publishMetadata()
-        // Re-stamp the playback state so we look freshly-playing (most recent session wins ties).
+        // re-stamp the state so we look freshly playing (most recent session wins ties)
         session?.setPlaybackState(
             PlaybackState.Builder()
                 .setActions(
@@ -204,14 +205,12 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Publish a fake "now playing" track over AVRCP.
+     * publish a fake "now playing" track over avrcp.
      *
-     * The dash gates its transport commands on there being a real track: it shows a song title on the
-     * HUD, and won't send next/prev/play-pause for something that isn't playing. We took over the
-     * media session but published no metadata, so the bike saw an empty track — which is why VOLUME
-     * (a stateless command) got through while HOLD did nothing (2026-07-16 bike test). Giving it a
-     * title/artist/duration makes the dash treat us as a playing track and emit those commands, which
-     * we then map to Android Auto navigation. The title doubles as on-HUD feedback that the mode is on.
+     * the dash won't send next/prev/play-pause unless it thinks there's a real track, it shows a
+     * song title on the hud. we had the media session but published no metadata, so the bike saw an
+     * empty track: volume (stateless) got through, hold did nothing (2026-07-16 test). giving it a
+     * title/artist/duration makes it treat us as playing. the title also shows the mode is on.
      */
     private fun publishMetadata() {
         try {
@@ -229,13 +228,11 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Post a MediaStyle notification bound to our session.
+     * post a mediastyle notification tied to our session.
      *
-     * Without one, Android never lists us in the notification shade / lock-screen media controls —
-     * i.e. the system doesn't treat us as a fully-registered media app, even though we hold the
-     * session and audio focus. The dash appears to key off the same registration: after publishing
-     * metadata it started sending PLAY, but never next/prev (2026-07-16 test). This is the remaining
-     * piece that makes us look like a normal music player to both the system UI and AVRCP.
+     * without one android doesn't list us in the shade / lock screen, i.e. doesn't count us as a
+     * fully registered media app even though we hold the session and focus. the dash seems to key
+     * off the same thing: after metadata it sent PLAY but never next/prev (2026-07-16 test).
      */
     private fun postMediaNotification() {
         val s = session ?: return
@@ -270,7 +267,7 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         focusRequest = null
     }
 
-    /** A looping silent track: makes us a genuinely "playing" media app so we win button routing. */
+    /** looping silent track, so we count as actually playing and win button routing */
     private fun startSilence() {
         if (silence != null) return
         try {
@@ -305,14 +302,13 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Tear down for good.
+     * tear down for good.
      *
-     * [released] and the callback purge are not belt-and-braces — without them a stopped bridge came
-     * back from the dead. The re-assert poll lives on this handler for up to 90 s, so a bridge the
-     * user had already stopped would still wake up, take audio focus, post a media notification and
-     * re-pin the volume: their music would pause again with the app stopped. Visible in the
-     * 2026-07-16 800NK log as two `bike link up — re-asserting` lines 23 ms apart — the dead bridge
-     * and its replacement, both alive at once.
+     * the released flag and the callback purge matter: the re-assert poll sits on this handler for
+     * up to 90s, so without them a bridge you'd already stopped wakes up later, takes audio focus,
+     * posts a notification and re-pins the volume, your music pausing itself with the app stopped.
+     * showed up in the 2026-07-16 800NK log as two "bike link up" lines 23ms apart, the dead bridge
+     * and its replacement both alive.
      */
     fun stop() {
         released = true
@@ -326,15 +322,14 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         session = null
     }
 
-    // ── volume as a navigation source ────────────────────────────────────────────────────────────
+    // ---- volume as a navigation source ----────────────────
 
     /**
-     * Pin the stream volume to the middle while capturing.
+     * park the volume mid-scale while capturing.
      *
-     * The bike sends AVRCP *absolute* volume, so we read the DIRECTION of each change. Restoring to
-     * the previous value (what we did first) breaks at the ends: at max, pressing up produces no
-     * change, so no event — same at 0 for down (2026-07-16 bike report). Parking at mid guarantees
-     * headroom both ways, so every press registers.
+     * the bike sends absolute volume, so we read the direction of each change. restoring the
+     * previous value (first attempt) breaks at the ends: at max, pressing up changes nothing so
+     * there's no event, same at 0 for down. mid-scale always has headroom both ways.
      */
     private fun pinVolume() {
         try {
@@ -348,7 +343,7 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         }
     }
 
-    /** Stop pinning and give the user their volume back. */
+    /** stop pinning, give the user their volume back */
     private fun unpinVolume() {
         pinnedVolume = -1
         if (userVolume >= 0) {
@@ -358,13 +353,12 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
     }
 
     /**
-     * Watch the stream volume: the bike's up/down arrive as AVRCP absolute volume (no key event at
-     * all — verified: a remote-volume provider never fired), so the direction of the change IS the
-     * button press. Re-pin immediately afterwards.
+     * watch the stream volume. the 450SR's up/down arrive as absolute volume with no key event at
+     * all (a VolumeProvider never fired once), so the direction of the change is the press. re-pin
+     * straight after.
      *
-     * No timing guard: our own re-pin write lands back ON [pinnedVolume], which the equality check
-     * below ignores. That's self-correcting and — unlike the old 300 ms guard — doesn't swallow
-     * rapid presses.
+     * no timing guard: our own re-pin lands back on pinnedVolume and the equality check below
+     * ignores it. self correcting, and unlike the old 300ms guard it doesn't swallow fast presses.
      */
     private fun startVolumeObserver() {
         if (volumeObserver != null) return
@@ -377,22 +371,22 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
                 val jump = now - pinnedVolume            // signed, in Android volume steps
                 val up = jump > 0
                 val dir = if (up) "UP" else "DOWN"
-                // Re-pin FIRST: the gesture handling below can take a while (BACK/HOME redraw the
-                // dash), and until we re-pin, a follow-up press is measured from the wrong base.
+                // re-pin first: the gesture below can take a while (back/home redraw the dash) and
+                // until we do, the next press is measured from the wrong base
                 try { audio.setStreamVolume(AudioManager.STREAM_MUSIC, pinnedVolume, 0) } catch (_: Exception) {}
 
                 val maxVol = try { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) } catch (e: Exception) { 25 }
                 if (kotlin.math.abs(jump) > maxGestureSteps(maxVol)) {
-                    // Not a handlebar press — something else moved the volume (the phone's own
-                    // slider, a call, or the Bluetooth link dropping, which slams it to 0). Acting
-                    // on it sent a spurious BACK to Android Auto the instant the bike disconnected.
+                    // not a handlebar press. something else moved the volume: the phone's slider,
+                    // a call, or the bt link dropping (which slams it to 0). acting on that sent a
+                    // spurious back to AA the moment the bike disconnected.
                     log("[BTN] volume $dir ($pinnedVolume→$now, jump=$jump) — too big for a button, ignoring")
                     return
                 }
 
                 val double = kotlin.math.abs(jump) >= doubleTapSteps(maxVol)
-                // Double tap — see [DOUBLE_TAP_STEPS]. Nothing is sent first: it arrives as one
-                // event, so unlike the old timing-based guess we know it's a double before acting.
+                // double tap, see DOUBLE_TAP_STEPS. it arrives as one event so we know before
+                // acting, unlike the old timing based guess.
                 val gesture = when {
                     up && double -> ButtonGesture.VOL_UP_DOUBLE
                     up -> ButtonGesture.VOL_UP_PRESS
@@ -416,14 +410,9 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         volumeObserver = null
     }
 
-    // ── gesture → action dispatch ────────────────────────────────────────────────────────────────
+    // ---- gesture -> action ----──────────────────
 
-    /**
-     * Run whatever [ButtonMap] says this gesture should do.
-     *
-     * The mapping is read per press rather than cached, so changing it in Button mapping takes
-     * effect on the very next press — no reconnect, no restart.
-     */
+    /** run whatever ButtonMap says this gesture does. read per press, so edits apply right away. */
     private fun run(gesture: ButtonGesture) {
         if (!ButtonMode.isControlAa(context)) return   // media mode: leave the buttons to music
         val action = ButtonMap.get(context, gesture)
@@ -450,6 +439,32 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         }
     }
 
+    /**
+     * a key that can also be double tapped.
+     *
+     * the single fires immediately instead of waiting out the window. these are the knob, and
+     * putting 400ms of lag on every scroll step to serve a gesture most people won't map is a bad
+     * trade. cost: a double runs the single first, and scrolling faster than ~2.5 clicks/sec reads
+     * as doubles.
+     *
+     * that's why the detection is skipped unless the x2 gesture is mapped to something. left on
+     * "do nothing" (the default) the button behaves exactly as before, no timing involved.
+     */
+    private fun pressedWithDouble(single: ButtonGesture, double: ButtonGesture) {
+        if (!ButtonMode.isControlAa(context)) return
+        if (ButtonMap.get(context, double) == ButtonAction.NONE) { run(single); return }
+
+        val now = android.os.SystemClock.uptimeMillis()
+        val last = lastPressMs[single] ?: 0L
+        if (now - last < DOUBLE_TAP_MS) {
+            lastPressMs[single] = 0L        // consume it, so a triple isn't two doubles
+            run(double)
+            return
+        }
+        lastPressMs[single] = now
+        run(single)
+    }
+
     private fun key(code: Int) {
         val sink = AaVideoBridge.keySink
         if (sink == null) log("[BTN] no Android Auto session — key $code dropped") else sink(code)
@@ -459,7 +474,7 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         NavLauncher.navigate(context, SavedPlaces.query(context, slot), log)
     }
 
-    // ── where gestures come from ─────────────────────────────────────────────────────────────────
+    // ---- where gestures come from ----─────────────────────
 
     private val callback = object : MediaSession.Callback() {
         override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
@@ -471,49 +486,80 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
             }
             return true
         }
-        // Fallbacks: the bike takes the raw-key path above (onMediaButtonEvent returning true
-        // suppresses these), but other dashes / Bluetooth remotes may dispatch here instead.
-        override fun onPlay() = run(ButtonGesture.ENTER_PRESS)
-        override fun onPause() = run(ButtonGesture.ENTER_PRESS)
+        // not just fallbacks: the bike's raw keys take the path above, but android auto itself
+        // calls these directly (transport controls, no KeyEvent) when its on-screen media buttons
+        // are used. on a touch dash that's most play/pause traffic.
+        override fun onPlay() = enterPress()
+        override fun onPause() = enterPress()
         override fun onSkipToNext() = run(ButtonGesture.NEXT_KEY)
         override fun onSkipToPrevious() = run(ButtonGesture.PREV_KEY)
     }
 
     /**
-     * Map a raw media keycode to a gesture.
+     * play/pause with a loop breaker.
      *
-     * This — not the [callback] transport methods — is the path the bike actually takes: it sends
-     * AVRCP passthrough, which arrives as a KeyEvent, and [MediaSession.Callback.onMediaButtonEvent]
-     * returning true suppresses the onPlay/onPause dispatch.
+     * on a touch dash this can feed itself: tap AA's on-screen play button, gearhead calls play()
+     * on our session (we're the active media session), we turn that into select, select presses
+     * the still-focused play button, gearhead calls pause(), repeat. the 800NK log has hundreds
+     * of selects at ~8ms apart from one tap, for seconds.
      *
-     * Keys with no gesture (stop, ff, rewind) are logged above and dropped rather than aliased onto
-     * some other gesture's action — that gesture might be mapped to "navigate home".
+     * a real double tap on that bike measures ~230ms between presses and no finger gets under
+     * ~120ms, while the loop runs at ipc speed. so a play/pause under 150ms after the last one we
+     * acted on can't be a person and is dropped. dropping it sends no select, which is what
+     * starves the loop.
+     */
+    private fun enterPress() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val gap = now - lastEnterMs
+        if (gap in 0 until ENTER_MIN_GAP_MS) {
+            if (enterDropsLogged++ % 50 == 0) {
+                log("[BTN] play/pause ${gap}ms after the last one — not a finger, dropped")
+            }
+            return
+        }
+        enterDropsLogged = 0
+        lastEnterMs = now
+        run(ButtonGesture.ENTER_PRESS)
+    }
+
+    private val ENTER_MIN_GAP_MS = 150L
+    private var lastEnterMs = 0L
+    private var enterDropsLogged = 0
+
+    /**
+     * map a raw media keycode to a gesture. this, not the callback methods above, is the path the
+     * bike actually takes: avrcp passthrough arrives as a KeyEvent, and onMediaButtonEvent returning
+     * true stops onPlay/onPause firing.
+     *
+     * keys with no gesture (stop, ff, rewind) are logged and dropped, not aliased onto some other
+     * gesture, that gesture might be mapped to "navigate home".
      */
     private fun forward(keyCode: Int) {
         when (keyCode) {
-            // The dash's enter is a play/pause TOGGLE: it sends PLAY when it believes we're stopped
-            // and PAUSE when it believes we're playing (which is why it flipped to PAUSE once we
-            // published metadata). Both are the same physical button.
+            // enter is a play/pause toggle: PLAY when the dash thinks we're stopped, PAUSE when it
+            // thinks we're playing (why it flipped once we published metadata). same button.
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
             KeyEvent.KEYCODE_MEDIA_PLAY,
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> run(ButtonGesture.ENTER_PRESS)
-            // On the 800NK these ARE the ▲/▼ buttons: it sends no volume at all. Dropping them
-            // (which an earlier version did, because on the 450SR they're only a useless hold) left
-            // that bike with two dead buttons.
-            KeyEvent.KEYCODE_MEDIA_NEXT -> run(ButtonGesture.NEXT_KEY)
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> run(ButtonGesture.PREV_KEY)
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> enterPress()
+            // on the 800NK these are the left/right buttons, and it sends no volume at all. an
+            // earlier version dropped them (on the 450SR they're a useless hold) which left that
+            // bike with two dead buttons.
+            KeyEvent.KEYCODE_MEDIA_NEXT ->
+                pressedWithDouble(ButtonGesture.NEXT_KEY, ButtonGesture.NEXT_DOUBLE)
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS ->
+                pressedWithDouble(ButtonGesture.PREV_KEY, ButtonGesture.PREV_DOUBLE)
         }
     }
 
     companion object {
-        /** Duration of the fake track we advertise, so the dash sees a normal "now playing". */
+        /** length of the fake track we advertise, so the dash sees a normal now-playing */
         private const val TRACK_MS = 3_600_000L
 
         /**
-         * How big a volume jump means the rider double-tapped, rather than tapped once.
+         * how big a volume jump means the rider double-tapped, rather than tapped once.
          *
          * A double-tap does NOT arrive as two events. The bike coalesces the presses and sends a
-         * single AVRCP absolute volume, so the *size* of the jump is the press count — which is why
+         * single AVRCP absolute volume, so the *size* of the jump is the press count, which is why
          * the original timing-based detector never once fired (2026-07-16 bike log, ~700 presses).
          * Measured on a Xiaomi (max volume 25, pinned at 12), every event in that log was one of
          * exactly five values:
@@ -533,8 +579,8 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         /**
          * Above this, the volume didn't move because of a handlebar button.
          *
-         * The phone's own slider, a call, or the Bluetooth link dropping can all rewrite the volume
-         * — and a drop slams it to 0, which from a mid-scale pin looks like an enormous "double
+         * the phone's own slider, a call, or the Bluetooth link dropping can all rewrite the volume
+         *, and a drop slams it to 0, which from a mid-scale pin looks like an enormous "double
          * tap". That fired a spurious BACK into Android Auto at the exact moment the 800NK
          * disconnected (2026-07-16 log: `volume DOWN (7→0, jump=-7) ×2 → Back`). A real press is a
          * couple of steps; anything approaching a third of the scale is somebody else's doing.
@@ -542,17 +588,28 @@ class MediaButtonBridge(private val context: Context, private val log: (String) 
         private fun maxGestureSteps(maxVol: Int): Int =
             kotlin.math.max(4, kotlin.math.ceil(maxVol * 0.28).toInt())
 
-        // Media re-assert once the bike link is up — see [scheduleReassertWhenBikeUp].
+        /**
+         * Window for a double-tap of the ◀/▶ keys, see [pressedWithDouble].
+         *
+         * Measured, not guessed: on the 800NK two deliberate taps arrived 224 ms and 245 ms apart
+         * (2026-07-16 log), and a single press produces exactly one event (2026-07-17 log), so the
+         * dash isn't echoing and timing is a real signal here. 400 ms leaves comfortable headroom
+         * over ~230 ms without being so wide that ordinary scrolling reads as doubles, and since
+         * the detection only runs when the ×2 gesture is mapped, the failure mode is opt-in.
+         */
+        private const val DOUBLE_TAP_MS = 400L
+
+        // media re-assert once the bike link is up, see scheduleReassertWhenBikeUp
         private const val REASSERT_POLL_MS = 1_000L
         private const val REASSERT_GIVEUP_MS = 90_000L
-        /** Let the dash's AVRCP link settle after the bike connects before poking it. */
+        /** let the avrcp link settle after the bike connects before poking it */
         private const val REASSERT_SETTLE_MS = 3_000L
-        /** Long enough that the drop and re-take read as two events, not a no-op. */
+        /** long enough that the drop and re-take read as two events, not a no-op */
         private const val REASSERT_GAP_MS = 500L
         private const val MEDIA_CHANNEL = "opencflink_media"
         private const val MEDIA_NOTIF_ID = 3   // must not collide with AndroidAutoService's NOTIF_ID (2)
 
-        /** The live bridge (when Android Auto is running), so the settings toggle can reach it. */
+        /** the live bridge, so the settings toggle can reach it */
         @Volatile var instance: MediaButtonBridge? = null
             private set
     }

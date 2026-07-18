@@ -19,6 +19,39 @@
             android:orientation="vertical"
             android:padding="12dp">
 
+            <!-- the phone as the dash's touchscreen. first because on a non-touch dash it's the
+                 easiest way to drive AA, and on any dash it's the way to set things up while stopped. -->
+            <com.google.android.material.card.MaterialCardView style="@style/StepCard">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        style="@style/SettingsSection"
+                        android:paddingTop="4dp"
+                        android:text="DASH VIEW" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_dash_view"
+                        android:layout_width="match_parent"
+                        android:layout_height="58dp"
+                        android:layout_margin="3dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="Open dash on phone"
+                        android:textSize="15sp"
+                        app:cornerRadius="16dp" />
+
+                    <TextView
+                        style="@style/SettingsHint"
+                        android:paddingTop="8dp"
+                        android:text="Shows what's on the dash and lets you tap it. For setting up while stopped." />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Knob first: on a rotary head unit this is the primary navigation. -->
             <com.google.android.material.card.MaterialCardView style="@style/StepCard">
 
@@ -31,7 +64,7 @@
                     <TextView
                         style="@style/SettingsSection"
                         android:paddingTop="4dp"
-                        android:text="ROTARY KNOB" />
+                        android:text="KNOB" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -52,7 +85,7 @@
                     <TextView
                         style="@style/SettingsHint"
                         android:paddingTop="6dp"
-                        android:text="Steps focus through lists — this is what actually moves the highlight inside menus." />
+                        android:text="Moves the highlight through lists. This is the one that works inside menus." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -116,7 +149,7 @@
                     <TextView
                         style="@style/SettingsHint"
                         android:paddingTop="6dp"
-                        android:text="Arrows jump between panes (app list ↔ taskbar). Use the knob to move within one." />
+                        android:text="Arrows jump between panes. Use the knob to move inside one." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -141,7 +174,7 @@
                         android:layout_margin="3dp"
                         android:insetTop="0dp"
                         android:insetBottom="0dp"
-                        android:text="🎤  Assistant"
+                        android:text="🎤 Assistant"
                         android:textSize="15sp"
                         app:cornerRadius="16dp" />
 
@@ -154,7 +187,7 @@
                     <TextView
                         style="@style/SettingsHint"
                         android:paddingTop="4dp"
-                        android:text="Speak into your helmet mic — Android Auto hears it through the phone. To reach this from the bars, map a double tap to Assistant in Settings → Customize buttons." />
+                        android:text="Speak into your helmet mic. To get this from the bars, map a button to Assistant." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
@@ -182,7 +215,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:gravity="center"
-            android:text="No Android Auto session"
+            android:text="Not connected"
             android:textSize="17sp"
             android:textStyle="bold"
             android:textColor="?attr/colorOnSurface" />
@@ -191,6 +224,6 @@
             style="@style/SettingsHint"
             android:layout_marginTop="6dp"
             android:gravity="center"
-            android:text="Connect on the first tab — the controls light up once the dash is projecting." />
+            android:text="Connect first. The controls turn on once the dash is showing Android Auto." />
     </LinearLayout>
 </FrameLayout>

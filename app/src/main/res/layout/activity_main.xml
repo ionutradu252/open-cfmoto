@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Shell: a persistent status header, a swappable tab body, and a bottom nav bar.
-  The four tabs are plain <include>s toggled by visibility rather than Fragments — every control
+  The four tabs are plain <include>s toggled by visibility rather than Fragments, every control
   still lives in MainActivity's view tree, so findViewById keeps working and there is no fragment
   lifecycle to fight with when Google Android Auto recreates this activity mid-hand-off.
 -->

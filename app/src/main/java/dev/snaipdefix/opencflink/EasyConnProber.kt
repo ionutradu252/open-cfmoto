@@ -22,12 +22,12 @@ import kotlin.concurrent.thread
  * EasyConn / Carbit PXC client for CFMoto MotoPlay.
  *
  * Topology (verified in cfmoto-tcp-v5.log): the PHONE is the SERVER.
- *  1. Discover the bike (gateway 192.168.0.1, EasyConn mDNS advertises :10930).
- *  2. Open TCP servers on 10920, 10921, 10922 bound to our bike-network IP.
- *  3. Connect once to bike:10930 and send ECP_PXC_MDNS_RESPOND (cmd 0x70000010, JSON);
+ * 1. Discover the bike (gateway 192.168.0.1, EasyConn mDNS advertises :10930).
+ * 2. Open TCP servers on 10920, 10921, 10922 bound to our bike-network IP.
+ * 3. Connect once to bike:10930 and send ECP_PXC_MDNS_RESPOND (cmd 0x70000010, JSON);
  *     bike replies {"status":true} and we close that socket.
- *  4. The bike then connects BACK to our listening ports and drives the PXC handshake
- *     (channel selects, CLIENT_INFO, SN check, heartbeats) — handled by [PxcHandshake].
+ * 4. The bike then connects BACK to our listening ports and drives the PXC handshake
+ *     (channel selects, CLIENT_INFO, SN check, heartbeats), handled by [PxcHandshake].
  */
 class EasyConnProber(
     private val context: Context,
@@ -39,29 +39,57 @@ class EasyConnProber(
         const val PORT_PXC_CTRL   = 10922   // PXCService ctrl (channel selects + CLIENT_INFO)
         const val BIKE_PROBE_PORT = 10930   // bike's EasyConn mDNS/probe endpoint
         const val SPOOFED_PACKAGE = "com.cfmoto.cfmotointernational"
+        /** how many raw touch frames to dump per session, enough to decode a pinch */
+        private const val TOUCH_HEX_CAP = 24
+
+        // ghost-touch filtering for the 800NK digitizer. it splits one finger into two contacts
+        // during a press or drag, so the log shows pointer counts climbing to 3-4 on a single-finger
+        // swipe and second contacts landing right on top of the first. left alone AA reads them as
+        // stray taps and pinch-zoom. see handleTouch.
+        /** a contact within this many px of another, different pointer is the same finger ghosting. */
+        private const val GHOST_MERGE_PX = 48
+        /** a finger whose UP frame was lost is dropped after this long with no update. */
+        private const val POINTER_STALE_MS = 300L
+        /** AA never needs more than two fingers (pinch); extra contacts are always noise. */
+        private const val MAX_POINTERS = 2
+
+        // contact re-acquisition. the 800NK digitizer drops a finger mid-drag and picks it straight
+        // back up: measured 0-14ms apart and under 150px, while a real re-tap on the same dash is
+        // 150-350ms. committing that up ends the gesture, so one map pan reaches AA as a string of
+        // taps. google maps opens a place card on every tap, which is the "it opens things I never
+        // touched" report; waze ignores stray map taps, which is why waze looked fine.
+        /** hold an up this long to see if the same finger comes back. well under a real re-tap. */
+        private const val STITCH_MS = 80L
+        /** and it has to come back near where it left. */
+        private const val STITCH_PX = 150
+
+        /** two contacts this close are the same finger the digitizer reported twice. real pinch
+         *  fingers sit far further apart, so this keeps pinch while dropping same-spot ghosts. */
+        internal fun near(ax: Int, ay: Int, bx: Int, by: Int, tol: Int = GHOST_MERGE_PX): Boolean =
+            kotlin.math.abs(ax - bx) <= tol && kotlin.math.abs(ay - by) <= tol
         private val LISTEN_PORTS = intArrayOf(PORT_PXC_CTRL, PORT_MEDIA_CTRL, PORT_MEDIA_DATA)
 
         /**
          * Input-discovery logging. This dash is non-touch (`supportScreenTouch=false`) but reports
          * `supportHID=true`, so its physical buttons/knob must arrive as some PXC frame we don't yet
          * decode. With this on, every inbound frame that ISN'T routine handshake/heartbeat/video
-         * traffic is logged under the `[INPUT?]` tag with full hex — press each bike button once and
+         * traffic is logged under the `[INPUT?]` tag with full hex, press each bike button once and
          * the distinct frame it produces (cmd/cmdType + payload) becomes mappable. Leave on until the
          * buttons are mapped; it only fires on non-routine frames so normal traffic stays quiet.
          */
         const val DEBUG_LOG_INPUT = true
 
-        /** Control-plane (:10922) cmds that are routine handshake/heartbeat — suppressed from [INPUT?]. */
+        /** Control-plane (:10922) cmds that are routine handshake/heartbeat, suppressed from [INPUT?]. */
         private val CTRL_ROUTINE = setOf(
             0x10000, 0x10001, 0x20000, 0x20001, 0x30000, 0x30001, 0x40000, 0x40001,
             0x10010, 0x10011, 0x10690, 0x10691, 0x103e0, 0x103e1, 0x201c0, 0x201c1,
             0x70000000, 0x70000001,
-            // CFDL26 notify burst this bike sends every (re)connect — already acked in the profile.
+            // CFDL26 notify burst this bike sends every (re)connect, already acked in the profile.
             0x103b0, 0x103b1, 0x10470, 0x10471, 0x10450, 0x10451, 0x104a0, 0x104a1,
             0x10780, 0x10781, 0x103a0, 0x103a1, 0x10020, 0x10021,
         )
 
-        /** Media-plane (:10921/:10920) cmdTypes that are routine video negotiation/touch — suppressed. */
+        /** Media-plane (:10921/:10920) cmdTypes that are routine video negotiation/touch, suppressed. */
         private val MEDIA_ROUTINE = setOf(16, 17, 32, 48, 49, 64, 65, 96, 97, 112, 113, 114, 115, 128, 129)
 
         private const val INPUT_HEX_CAP = 256
@@ -82,10 +110,30 @@ class EasyConnProber(
     @Volatile private var negH = 384
     @Volatile private var framesSent = 0
 
-    /** Live status for the on-screen status row. */
+    /** live status for the on-screen status row. */
     val bikeConnected: Boolean get() = running && probed
     val framesSentCount: Int get() = framesSent
     @Volatile private var touchMoves = 0
+    /** raw touch frames dumped so far, see handleTouch */
+    @Volatile private var touchHexDumped = 0
+    /** fingers down, id -> bike canvas position. insertion ordered, because aap's actionIndex is an
+     * index into the pointer list we send, so the order has to stay stable. */
+    /** live dash contacts, keyed by the dash's pointer id. value is x, y and the time we last saw
+     *  it, so a finger whose UP frame got lost can be evicted instead of stranding it down. */
+    private val pointers = LinkedHashMap<Int, Triple<Int, Int, Long>>()
+    private var ghostsDropped = 0
+    private var stitches = 0
+
+    // an up we are holding back briefly (see STITCH_MS), and the timer that commits it
+    private var pendingUpId = -1
+    private var pendingUpX = 0
+    private var pendingUpY = 0
+    private var pendingUpAt = 0L
+    private var pendingUpTask: java.util.concurrent.ScheduledFuture<*>? = null
+    private var stitchExec: java.util.concurrent.ScheduledExecutorService? = null
+
+    /** dash pointer id -> the id AA already knows, when a dropped contact came back as a new id */
+    private val aaIdOf = HashMap<Int, Int>()
 
     fun start(network: Network?) {
         if (running) { log("already running"); return }
@@ -119,16 +167,21 @@ class EasyConnProber(
             sendMdnsRespond(bikeIp, myIp, network)
         }
         startHeartbeatLog()
+        stitchExec = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "ec-touch-stitch").apply { isDaemon = true }
+        }
     }
 
     fun stop() {
         running = false
         probed = false
-        // Only stop the pipeline if we created it; the shared Android Auto pipeline is owned
+        // only stop the pipeline if we created it; the shared Android Auto pipeline is owned
         // by AndroidAutoService and must outlive a bike disconnect.
         if (ownsVideo) video?.stop()
         video = null; ownsVideo = false
         heartbeatThread?.interrupt(); heartbeatThread = null
+        synchronized(pointers) { cancelPendingUp(); pointers.clear(); aaIdOf.clear() }
+        stitchExec?.shutdownNow(); stitchExec = null
         for (s in servers) try { s.close() } catch (_: IOException) {}
         servers.clear()
         multicastLock?.let { try { if (it.isHeld) it.release() } catch (_: Exception) {} }
@@ -136,7 +189,7 @@ class EasyConnProber(
         log("stopped")
     }
 
-    /** Step 3: phone→bike probe. cmd 0x70000010 + JSON; expect 0x70000011 {"status":true}. */
+    /** step 3: phone→bike probe. cmd 0x70000010 + JSON; expect 0x70000011 {"status":true}. */
     private fun sendMdnsRespond(bikeIp: Inet4Address, myIp: Inet4Address, network: Network?) {
         var attempt = 0
         while (running && attempt < 5 && !probed) {
@@ -197,7 +250,7 @@ class EasyConnProber(
         try {
             val input = BufferedInputStream(socket.getInputStream())
             // Framing is by port (consistent across every run):
-            //   10922 = PXC control (16-byte CmdBaseHead); 10921/10920 = media (8-byte ReqBase).
+            // 10922 = PXC control (16-byte CmdBaseHead); 10921/10920 = media (8-byte ReqBase).
             if (port == PORT_PXC_CTRL) {
                 log("[$tag] framing=CmdBaseHead (PXC control)")
                 if (DEBUG_LOG_INPUT) log("[$tag] INPUT capture ON — press each bike button once; watch for [INPUT?] lines")
@@ -235,7 +288,7 @@ class EasyConnProber(
      * socket-timeout watchdog resets the whole session every ~7s. We send CMD_HEARTBEAT every
      * [CTRL_HEARTBEAT_MS] to keep it alive. Writes go through [PxcFrame.write], which synchronizes on
      * the stream, so this is safe alongside the read thread's reply writes. Gated on the profile,
-     * which is set from CLIENT_INFO within ~100ms — before the first heartbeat is due.
+     * which is set from CLIENT_INFO within ~100ms, before the first heartbeat is due.
      */
     private fun startCtrlHeartbeat(tag: String, socket: Socket): Thread =
         thread(name = "ec-ctrl-hb-${socket.port}", isDaemon = true) {
@@ -274,7 +327,7 @@ class EasyConnProber(
     }
 
     /** Frame reply on the data socket is written RAW (not ReqBase): [size i32 LE][access unit].
-     *  Inferred from the partial-decompiled MediaProjectServerDataExecuteThread.reply*Data(). */
+     * Inferred from the partial-decompiled MediaProjectServerDataExecuteThread.reply*Data(). */
     private fun sendFrameRaw(out: OutputStream, frame: ByteArray) {
         val sz = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(0, frame.size).array()
         synchronized(out) {
@@ -307,11 +360,16 @@ class EasyConnProber(
                 val wantEncoder = if (body.size >= 12) cfg.getInt(8) else 2
                 val supportExtend = if (body.size >= 30) body[29] else 0
                 log("[$tag] REQ_CONFIG_CAPTURE w=$w h=$h fps=$fps wantEncoder=$wantEncoder ext=$supportExtend len=${body.size}")
+                AppStatus.panelRequested = "${w}x$h"
+                // the one moment the dash tells us its real screen, and it's too late to use: AA's
+                // resolution was fixed when AA connected, minutes ago. so write it down against this
+                // bike and use it next connect. see LearnedPanels.
+                if (w > 0 && h > 0) LearnedPanels.remember(context, BikeWifi.currentSsid, w, h, log)
                 val (rw, rh) = handshake.profile.roundCaptureDimensions(w, h)
                 negW = rw
                 negH = rh
-                // If Android Auto is the source (shared pipeline), size its encoder + letterbox
-                // compositor to this bike canvas now — before the bike starts pulling frames (112/114).
+                // if AA is the source, size its encoder + compositor to this canvas now, before the
+                // bike starts pulling frames (112/114)
                 AaVideoBridge.pipeline?.configureBikeCanvas(negW, negH)
                 // RLY_RV_CONFIG_CAPTURE (17): encoder(i32) | width&~15(s16) | height&~15(s16) | ext(byte)
                 val rly = ByteBuffer.allocate(9).order(ByteOrder.LITTLE_ENDIAN)
@@ -355,7 +413,7 @@ class EasyConnProber(
                     }
                 }
                 // Ensure the first frame the bike pulls is a keyframe (SPS+PPS+IDR). Critical for the
-                // Android Auto path, whose encoder has been running since REQ_CONFIG_CAPTURE — its
+                // Android Auto path, whose encoder has been running since REQ_CONFIG_CAPTURE, its
                 // initial IDR is already gone from the queue, so without this the dash starts mid-GOP
                 // on a P-frame and stays black. See VideoPipeline.onBikeDataStart().
                 video?.onBikeDataStart()
@@ -382,34 +440,158 @@ class EasyConnProber(
     }
 
     /**
-     * Dash touchscreen event (PXC media cmdType 32, 18-byte body, little-endian):
-     *   action u16 @0 (2=DOWN, 3=MOVE, 1=UP) | x u16 @2 | y u32 @4 | timestamp u32 @8 | …
-     * Coordinates are in the bike canvas we negotiated ([negW]x[negH]). Forward to the Android Auto
-     * session via [AaVideoBridge.touchSink], which letterbox-maps them into AA video space and sends
-     * them over the AAP INPUT channel. Actions are normalised to AaInput's 0=DOWN/1=UP/2=MOVE.
+     * dash touch event (pxc media cmdType 32, 18 byte body, little endian):
+     *
+     *   action u16 @0 (2=down, 3=move, 1=up) | x u16 @2 | y u16 @4 | pointer u16 @6 |
+     *   timestamp u32 @8 | 0x0003 u16 @12 | zero u32 @14
+     *
+     * y is 16 bit and @6 is the pointer index, decoded from the raw frames dumped on the 2026-07-17
+     * 800NK ride. reading y as a u32 (what this used to do) ate the pointer field into y's high
+     * half, so every second-finger event came out as y = 0x0001_0000 + realY = ~65660 on a 704 tall
+     * panel. those went to AA as a first-finger down at an impossible coordinate, giving it two
+     * downs with no up between and a touch teleporting off screen. that's why taps landed wrong, and
+     * almost certainly why the decoder dropped to 2fps and stalled whenever he touched anything.
+     *
+     * coords are in the canvas we negotiated (negW x negH). forwarded with all the pointers that are
+     * down, which is what aap wants and what makes pinch work. actions normalised to AaInput's
+     * 0=down/1=up/2=move.
      */
     private fun handleTouch(tag: String, body: ByteArray) {
         if (body.size < 8) { log("[$tag] touch frame too short (${body.size}b)"); return }
         val b = ByteBuffer.wrap(body).order(ByteOrder.LITTLE_ENDIAN)
         val rawAction = b.getShort(0).toInt() and 0xFFFF
         val x = b.getShort(2).toInt() and 0xFFFF
-        val y = b.getInt(4)
+        val y = b.getShort(4).toInt() and 0xFFFF
+        val pointerId = b.getShort(6).toInt() and 0xFFFF
         val action = when (rawAction) {
             2 -> 0   // DOWN
             1 -> 1   // UP
             3 -> 2   // MOVE
             else -> { log("[$tag] touch: unknown action=$rawAction x=$x y=$y"); return }
         }
-        // Log DOWN/UP (and the first MOVE) so the coordinate mapping is verifiable without move spam.
-        if (action != 2 || (touchMoves++ % 30) == 0) {
-            log("[$tag] TOUCH ${if (action==0) "DOWN" else if (action==1) "UP" else "MOVE"} bike=($x,$y) canvas=${negW}x$negH")
+        // dump raw frames for a while. this layout was worked out from exactly these, and a dash
+        // that numbers its pointers differently would show up here instead of as a mystery.
+        if (touchHexDumped < TOUCH_HEX_CAP) {
+            touchHexDumped++
+            log("[$tag] touch raw (${body.size}b): ${BleProtocol.bytesToHex(body)}")
         }
+
+        synchronized(pointers) {
+            val now = android.os.SystemClock.elapsedRealtime()
+
+            // drop fingers whose UP frame was lost, so a missed up can't strand one down forever.
+            pointers.entries.removeAll { (id, p) -> id != pointerId && now - p.third > POINTER_STALE_MS }
+
+            when (action) {
+                1 -> {
+                    if (!pointers.containsKey(pointerId)) return   // up for a filtered ghost
+                    // don't end the gesture yet: this dash drops contact mid-drag and comes back
+                    // milliseconds later. see STITCH_MS.
+                    holdUp(tag, pointerId, x, y, now)
+                    return
+                }
+                0 -> {
+                    // did the finger we are holding an up for just come back? then it never really
+                    // left: carry on the gesture as a move instead of starting a new one.
+                    if (pendingUpId >= 0 && now - pendingUpAt <= STITCH_MS &&
+                        near(pendingUpX, pendingUpY, x, y, STITCH_PX)
+                    ) {
+                        val originalId = aaIdFor(pendingUpId)
+                        cancelPendingUp()
+                        if (pointerId != originalId) aaIdOf[pointerId] = originalId
+                        if (stitches++ % 10 == 0) {
+                            log("[$tag] touch: contact came back ${now - pendingUpAt}ms later, " +
+                                "keeping the drag alive instead of ending it (#$stitches)")
+                        }
+                        emit(tag, 2, pointerId, x, y, now)   // as a MOVE, so AA sees one gesture
+                        return
+                    }
+                    // an unrelated new finger: let the held up land first so gestures stay ordered
+                    commitPendingUp(tag)
+                    if (isGhost(pointerId, x, y)) {
+                        if ((ghostsDropped++ % 20) == 0) {
+                            log("[$tag] touch: ignoring ghost contact at ($x,$y) near an existing finger")
+                        }
+                        return
+                    }
+                }
+                else -> if (isGhost(pointerId, x, y)) return
+            }
+
+            emit(tag, action, pointerId, x, y, now)
+        }
+    }
+
+    /** a contact sitting on top of a different finger is one finger reported twice */
+    private fun isGhost(pointerId: Int, x: Int, y: Int): Boolean =
+        pointers.any { (id, p) -> id != pointerId && near(p.first, p.second, x, y) }
+
+    private fun aaIdFor(dashId: Int): Int = aaIdOf[dashId] ?: dashId
+
+    /** send one event with the pointer set as it now stands. caller holds the pointers lock. */
+    private fun emit(tag: String, action: Int, dashId: Int, x: Int, y: Int, now: Long) {
+        pointers[dashId] = Triple(x, y, now)
+
+        // AA only ever needs two fingers; if the dash pushed more, keep the freshest two, always
+        // including the one that just changed so its action still lands.
+        if (pointers.size > MAX_POINTERS) {
+            val keep = (listOf(dashId) +
+                pointers.entries.sortedByDescending { it.value.third }.map { it.key })
+                .distinct().take(MAX_POINTERS).toSet()
+            pointers.keys.retainAll(keep)
+        }
+
+        // aap wants every pointer that's down in each report, plus which one changed
+        val ids = pointers.keys.toList()
+        val actionIndex = ids.indexOf(dashId).coerceAtLeast(0)
+        val snapshot = ids.map { id -> pointers[id]!!.let { Triple(aaIdFor(id), it.first, it.second) } }
+
+        if (action != 2 || (touchMoves++ % 30) == 0) {
+            log("[$tag] TOUCH ${if (action==0) "DOWN" else if (action==1) "UP" else "MOVE"} " +
+                "bike=($x,$y) ptr=$dashId of ${snapshot.size} canvas=${negW}x$negH")
+        }
+
         val sink = AaVideoBridge.touchSink
         if (sink == null) {
-            if (action != 2) log("[$tag] touch dropped — no AA session")
+            if (action != 2) log("[$tag] touch dropped, no AA session")
         } else {
-            sink(action, x, y)
+            sink(action, actionIndex, snapshot)
         }
+        if (action == 1) { pointers.remove(dashId); aaIdOf.remove(dashId) }
+    }
+
+    /** hold an up for STITCH_MS in case the digitizer is about to re-acquire the same finger */
+    private fun holdUp(tag: String, dashId: Int, x: Int, y: Int, now: Long) {
+        cancelPendingUp()
+        pendingUpId = dashId; pendingUpX = x; pendingUpY = y; pendingUpAt = now
+        pendingUpTask = try {
+            stitchExec?.schedule({
+                synchronized(pointers) {
+                    if (pendingUpId == dashId) {
+                        pendingUpId = -1
+                        emit(tag, 1, dashId, x, y, android.os.SystemClock.elapsedRealtime())
+                    }
+                }
+            }, STITCH_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (_: Exception) {
+            // executor gone (we are stopping): never swallow the up
+            emit(tag, 1, dashId, x, y, now); pendingUpId = -1; null
+        }
+    }
+
+    /** land a held up right now. caller holds the pointers lock. */
+    private fun commitPendingUp(tag: String) {
+        val id = pendingUpId
+        if (id < 0) return
+        val x = pendingUpX; val y = pendingUpY
+        cancelPendingUp()
+        emit(tag, 1, id, x, y, android.os.SystemClock.elapsedRealtime())
+    }
+
+    private fun cancelPendingUp() {
+        pendingUpTask?.cancel(false)
+        pendingUpTask = null
+        pendingUpId = -1
     }
 
     private fun resolveGateway(network: Network?): Inet4Address? {
@@ -426,7 +608,7 @@ class EasyConnProber(
 
         // Fallback for Wi-Fi Direct / AP networks that expose no default route and no DNS server
         // (e.g. SSID "DIRECT-go-CFMOTO-…", phone on 192.168.49.x): assume the bike is host .1 of
-        // our own IPv4 subnet — the standard group-owner address for an Android P2P group.
+        // our own IPv4 subnet, the standard group-owner address for an Android P2P group.
         val la = lp.linkAddresses.firstOrNull {
             val a = it.address
             a is Inet4Address && !a.isLoopbackAddress && !a.isAnyLocalAddress

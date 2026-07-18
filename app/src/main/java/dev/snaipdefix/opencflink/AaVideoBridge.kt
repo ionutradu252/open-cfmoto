@@ -1,43 +1,32 @@
 package dev.snaipdefix.opencflink
 
 /**
- * Shared hand-off between the Android Auto receiver (which owns the H.264 encoder/[VideoPipeline]
- * fed by AA's decoded video) and [EasyConnProber] (the bike PXC pipeline that pulls encoded
- * frames). When [pipeline] is non-null, the prober uses it as the video source instead of
- * creating its own Presentation/mirror pipeline — this is how Android Auto reaches the dash.
+ * hand-off between the AA receiver (which owns the encoder / VideoPipeline fed by AA's video) and
+ * EasyConnProber (the bike side that pulls encoded frames). when pipeline is set the prober uses it
+ * as the source instead of making its own mirror pipeline. this is how AA reaches the dash.
  */
 object AaVideoBridge {
     @Volatile var pipeline: VideoPipeline? = null
 
-    /**
-     * Fired once (by the AA receiver) when decoded Android Auto video reaches a steady frame
-     * rate — MainActivity uses this to auto-open the bike QR scanner so the AA→bike hand-off
-     * doesn't depend on the user remembering to scan after starting the receiver.
-     */
+    /** fires once when AA video is steady. MainActivity uses it to start the bike join. */
     @Volatile var onSteadyVideo: (() -> Unit)? = null
 
     /**
-     * Bike-touchscreen → Android Auto input bridge. [EasyConnProber] decodes the dash's touch frames
-     * (PXC media cmdType 32) and calls this with the raw bike-canvas coordinates and a normalised
-     * action (0=DOWN, 1=UP, 2=MOVE). The live AA session ([AaReceiver]) installs a sink that
-     * letterbox-maps the point into AA's video space and sends it over the AAP INPUT channel. Null
-     * when no AA session is active (touches are then dropped).
+     * bike touchscreen -> AA. EasyConnProber decodes the dash's touch frames (pxc cmdType 32) and
+     * calls this with a normalised action (0=down, 1=up, 2=move), the index of the pointer that
+     * changed, and every pointer currently down as (id, bikeX, bikeY).
+     *
+     * all of them every time, because that's what aap's TouchEvent wants, and it's what makes pinch
+     * work. AaReceiver installs a sink that maps each point into AA video space. null when there's
+     * no session, touches are dropped.
      */
-    @Volatile var touchSink: ((action: Int, canvasX: Int, canvasY: Int) -> Unit)? = null
+    @Volatile var touchSink: ((action: Int, actionIndex: Int, pointers: List<Triple<Int, Int, Int>>) -> Unit)? = null
 
-    /**
-     * Phone D-pad → Android Auto input bridge. MainActivity's on-screen buttons call this with an
-     * Android keycode (see [dev.snaipdefix.opencflink.aa.AaInput] KEY_* constants); the live AA session
-     * ([AaReceiver]) installs a sink that forwards it over the AAP INPUT channel so Maps/Waze can be
-     * navigated from the phone (needed because this dash is non-touch). Null when no AA session is
-     * active (presses are then dropped with a log line).
-     */
+    /** phone d-pad -> AA. the on-screen buttons call this with an android keycode (AaInput KEY_*).
+     * null when there's no session. */
     @Volatile var keySink: ((keycode: Int) -> Unit)? = null
 
-    /**
-     * Rotary-knob → Android Auto bridge. AA treats this dash as a rotary head unit, where the KNOB
-     * (not the D-pad) steps focus through list items. delta -1 = rotate back, +1 = forward. Wired to
-     * the app's ⟲/⟳ buttons and the bike's track-skip buttons. Null when no AA session is active.
-     */
+    /** rotary knob -> AA. we tell AA we're a rotary head unit, so the knob (not the d-pad) is what
+     * steps focus through lists. -1 = back, +1 = forward. */
     @Volatile var scrollSink: ((delta: Int) -> Unit)? = null
 }

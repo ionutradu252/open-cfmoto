@@ -14,13 +14,13 @@ android {
         applicationId = "dev.snaipdefix.opencflink"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.1.2.1"
+        versionCode = 11
+        versionName = "0.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // The header shows the running version — after a bike test it's the fastest way to be sure
+    // The header shows the running version - after a bike test it's the fastest way to be sure
     // which build is actually on the phone.
     buildFeatures {
         buildConfig = true
