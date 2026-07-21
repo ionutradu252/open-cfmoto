@@ -8,6 +8,7 @@
 ## tested bikes
 | fully working features |
 |---|
+| **CFMOTO 125NK** |
 | **CFMOTO 450SR** |
 | **CFMOTO 450MT** |
 | **CFMOTO 800NK Advanced** |
